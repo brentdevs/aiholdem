@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Spectator Arena</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a2e1a;
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 1rem;
+      display: flex;
+      flex-direction: row;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    /* Main content column (left) */
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-width: 0;
+    }
+
+    /* Sidebar (right) */
+    #sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      background: #1c2e1c;
+      border-left: 1px solid #3a5a3a;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 2rem);
+      position: sticky;
+      top: 1rem;
+      overflow: hidden;
+    }
+
+    /* Tab buttons */
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid #3a5a3a;
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 0.6rem 0;
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn:hover { color: #e8e8e8; }
+
+    .tab-btn.active {
+      color: #f0c040;
+      border-bottom-color: #f0c040;
+    }
+
+    /* Log panel */
+    #log-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #log-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.4rem 0;
+    }
+
+    .log-entry {
+      font-size: 0.78rem;
+      padding: 0.3rem 0.6rem;
+      border-bottom: 1px solid #2a3e2a;
+      color: #ccc;
+      word-break: break-word;
+    }
+
+    .log-entry.log-phase {
+      color: #f0c040;
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding-top: 0.5rem;
+    }
+
+    .log-entry.log-pot {
+      color: #7ec87e;
+      font-style: italic;
+    }
+
+    .log-entry.log-winner {
+      color: #f0c040;
+      font-weight: 700;
+      font-size: 0.82rem;
+      border-top: 1px solid #3a5a3a;
+      padding-top: 0.4rem;
+    }
+
+    /* Status bar */
+    #status-bar {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      align-items: center;
+    }
+
+    #status-bar span { color: #aaa; }
+    #status-bar strong { color: #f0c040; }
+
+    /* Section headings */
+    h2 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+      margin-bottom: 0.4rem;
+    }
+
+    /* Community cards */
+    #community-cards {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      min-height: 112px;
+      align-items: center;
+    }
+
+    /* Scale cards down inside community area */
+    #community-area .playing-card {
+      width: clamp(42px, 4vw, 68px);
+      height: clamp(58px, 5.5vw, 96px);
+      min-width: clamp(42px, 4vw, 68px);
+      min-height: clamp(58px, 5.5vw, 96px);
+    }
+
+    #community-area .playing-card .card-rank-tl,
+    #community-area .playing-card .card-suit-br {
+      font-size: clamp(0.6rem, 0.7vw, 0.9rem);
+    }
+
+    #community-area .playing-card .face-band {
+      font-size: clamp(0.85rem, 1vw, 1.3rem);
+      height: clamp(22px, 2.5vw, 36px);
+    }
+
+    /* Card styles */
+    .playing-card {
+      position: relative;
+      min-width: 80px;
+      min-height: 112px;
+      width: 80px;
+      height: 112px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      user-select: none;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .playing-card.red { color: #cc2222; }
+    .playing-card.black { color: #111; }
+
+    .card-rank-tl {
+      position: absolute;
+      top: 5px;
+      left: 7px;
+      font-size: 1rem;
+      font-weight: bold;
+      line-height: 1;
+    }
+
+    .card-suit-br {
+      position: absolute;
+      bottom: 5px;
+      right: 7px;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .face-card .face-band {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      transform: translateY(-50%);
+      height: 36px;
+      background: rgba(180, 30, 30, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 900;
+      letter-spacing: 0.02em;
+    }
+
+    .playing-card.card-back {
+      background: #1a3a6e;
+    }
+
+    .card-back-pattern {
+      position: absolute;
+      inset: 6px;
+      border-radius: 4px;
+      background: repeating-linear-gradient(
+        45deg,
+        #1e4080 0px,
+        #1e4080 4px,
+        #15306a 4px,
+        #15306a 8px
+      );
+      opacity: 0.85;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Poker Table                                                          */
+    /* ------------------------------------------------------------------ */
+    #poker-table {
+      position: relative;
+      /* Grow with available space, capped at a large max */
+      width: min(900px, 100%);
+      aspect-ratio: 900 / 480;
+      margin: 0 auto;
+      border-radius: 50%;
+      background: radial-gradient(ellipse at center, #2d7a2d 0%, #1a5c1a 55%, #0f3d0f 100%);
+      border: 6px solid #8b6914;
+      box-shadow: 0 0 0 3px #5a4008, 0 8px 32px rgba(0,0,0,0.7);
+      overflow: visible;
+    }
+
+    /* Community area — centered inside the table */
+    #community-area {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    #community-area #community-cards {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: nowrap;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #community-area .pot-display {
+      font-size: 0.85rem;
+      color: #f0c040;
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* Seat */
+    .seat {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      min-width: clamp(80px, 9vw, 140px);
+      max-width: clamp(100px, 11vw, 155px);
+      background: rgba(20, 40, 20, 0.88);
+      border: 2px solid #3a5a3a;
+      border-radius: 10px;
+      padding: 0.3rem 0.45rem;
+      font-size: clamp(0.55rem, 0.8vw, 0.85rem);
+      color: #e8e8e8;
+      transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
+      z-index: 10;
+    }
+
+    .seat.active-turn {
+      border-color: #f0c040;
+      box-shadow: 0 0 0 2px #f0c040, 0 0 18px rgba(240, 192, 64, 0.7);
+      z-index: 20;
+    }
+
+    .seat-turn-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #f0c040;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.15rem;
+    }
+
+    .seat.folded {
+      opacity: 0.45;
+    }
+
+    .seat-hud { display: flex; flex-direction: column; gap: 0.15rem; }
+
+    .seat-name {
+      font-weight: 700;
+      font-size: clamp(0.62rem, 0.75vw, 0.88rem);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: clamp(90px, 10vw, 150px);
+    }
+
+    .seat-chips { color: #aaa; font-size: clamp(0.58rem, 0.68vw, 0.8rem); }
+
+    .seat-bet { color: #f0c040; font-size: clamp(0.56rem, 0.65vw, 0.78rem); }
+
+    .dealer-btn {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #f0c040;
+      color: #1a2e1a;
+      font-size: 0.65rem;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+      z-index: 11;
+    }
+
+    .seat-hole-cards {
+      display: flex;
+      gap: 0.25rem;
+      margin-top: 0.3rem;
+      justify-content: center;
+    }
+
+    /* Scale cards in seats with viewport */
+    .seat-hole-cards .playing-card {
+      width: clamp(30px, 2.8vw, 50px);
+      height: clamp(42px, 4vw, 70px);
+      min-width: clamp(30px, 2.8vw, 50px);
+      min-height: clamp(42px, 4vw, 70px);
+    }
+
+    .seat-hole-cards .playing-card .card-rank-tl,
+    .seat-hole-cards .playing-card .card-suit-br {
+      font-size: clamp(0.48rem, 0.55vw, 0.72rem);
+    }
+
+    .seat-hole-cards .playing-card .face-band {
+      font-size: clamp(0.65rem, 0.78vw, 1rem);
+      height: clamp(14px, 1.6vw, 24px);
+    }
+
+    /* AI turn timer */
+    .ai-timer {
+      margin-top: 0.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .ai-timer-bar-track {
+      flex: 1;
+      height: 4px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .ai-timer-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: #f0c040;
+      border-radius: 2px;
+      transform-origin: left;
+      transition: background 0.5s;
+    }
+
+    .ai-timer-bar-fill.urgent { background: #e04040; }
+
+    .ai-timer-count {
+      font-size: 0.68rem;
+      color: #aaa;
+      min-width: 18px;
+      text-align: right;
+    }
+
+    /* Messages */
+    #messages {
+      font-size: 0.85rem;
+      color: #ff6b6b;
+      min-height: 1.4em;
+    }
+
+    /* Section wrapper */
+    .section {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ------------------------------------------------------------------ */
+    /* Arena-specific styles (Tasks 7.1 + 7.2)                             */
+    /* ------------------------------------------------------------------ */
+
+    /* Viewer count badge — in status bar, gold text */
+    #viewer-count-badge {
+      margin-left: auto;
+      color: #f0c040;
+      font-weight: 700;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    /* Live review panel — fixed width alongside the table */
+    #live-review-panel {
+      flex: 0 0 clamp(220px, 18vw, 340px);
+      width: clamp(220px, 18vw, 340px);
+      background: #1c2e1c;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      max-height: 500px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+
+    .live-review-heading {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #f0c040;
+      margin-bottom: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .live-review-entry {
+      border-bottom: 1px solid #2a3e2a;
+      padding: 0.5rem 0;
+    }
+
+    .live-review-entry:last-child {
+      border-bottom: none;
+    }
+
+    .live-review-entry-header {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.25rem;
+    }
+
+    .live-review-player {
+      font-weight: 700;
+      color: #e8e8e8;
+      font-size: 0.8rem;
+    }
+
+    .live-review-phase {
+      color: #aaa;
+      font-size: 0.78rem;
+    }
+
+    .live-review-action {
+      color: #f0c040;
+      font-size: 0.78rem;
+    }
+
+    .live-review-reasoning {
+      font-size: 0.78rem;
+      color: #ccc;
+      line-height: 1.4;
+    }
+
+    /* Inter-hand countdown — centered overlay on the poker table */
+    #inter-hand-countdown {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.65);
+      border-radius: 16px;
+      padding: 1.2rem 2rem;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    #inter-hand-countdown.visible {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    #countdown-number {
+      font-size: 3rem;
+      font-weight: 900;
+      color: #f0c040;
+      line-height: 1;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    }
+
+    #countdown-label {
+      font-size: 0.8rem;
+      color: #ccc;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* P-label prefix on seat names */
+    .seat-plabel {
+      color: #f0c040;
+      font-weight: 700;
+      font-size: 0.7rem;
+      margin-right: 0.15rem;
+    }
+
+    .seat.winner {
+      border-color: #f0c040 !important;
+      box-shadow: 0 0 0 3px #f0c040, 0 0 24px rgba(240, 192, 64, 0.85) !important;
+    }
+
+    /* Table + live review side-by-side wrapper */
+    #table-and-review {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      min-width: 0;
+    }
+
+    #table-wrapper {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      /* Padding gives absolutely-positioned seats room to overflow without clipping.
+         Scales with viewport so large screens get proportionally more breathing room. */
+      padding: clamp(70px, 10vw, 140px) clamp(90px, 12vw, 180px);
+    }
+
+    /* Mobile sidebar toggle button — hidden on desktop */
+    #sidebar-toggle {
+      display: none;
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 1000;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #f0c040;
+      color: #1a2e1a;
+      border: none;
+      font-size: 1.3rem;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+      line-height: 1;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Mobile responsive — screens ≤ 768px                                 */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+        padding: 0.5rem;
+        gap: 0.5rem;
+      }
+
+      /* Status bar: grid layout for compact display */
+      #status-bar {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.3rem 0.8rem;
+        padding: 0.5rem 0.7rem;
+        font-size: 0.78rem;
+      }
+
+      #status-bar a {
+        font-size: 0.78rem !important;
+      }
+
+      #viewer-count-badge {
+        margin-left: 0;
+        font-size: 0.78rem;
+      }
+
+      /* Stack table and review vertically */
+      #table-and-review {
+        flex-direction: column;
+      }
+
+      #table-wrapper {
+        padding: clamp(55px, 16vw, 90px) clamp(50px, 14vw, 80px);
+      }
+
+      /* Poker table fills width */
+      #poker-table {
+        width: 100%;
+      }
+
+      /* Seats: tighter sizing on mobile */
+      .seat {
+        min-width: 68px;
+        max-width: 95px;
+        padding: 0.2rem 0.3rem;
+        font-size: 0.6rem;
+        border-radius: 7px;
+      }
+
+      .seat-name {
+        font-size: 0.58rem;
+        max-width: 80px;
+      }
+
+      .seat-chips { font-size: 0.54rem; }
+      .seat-bet { font-size: 0.52rem; }
+      .seat-turn-label { font-size: 0.55rem; }
+
+      .seat-hole-cards .playing-card {
+        width: 24px;
+        height: 34px;
+        min-width: 24px;
+        min-height: 34px;
+      }
+
+      .seat-hole-cards .playing-card .card-rank-tl,
+      .seat-hole-cards .playing-card .card-suit-br {
+        font-size: 0.4rem;
+      }
+
+      .seat-hole-cards .playing-card .face-band {
+        font-size: 0.55rem;
+        height: 12px;
+      }
+
+      .dealer-btn {
+        width: 16px;
+        height: 16px;
+        font-size: 0.5rem;
+        top: -8px;
+        right: -8px;
+      }
+
+      /* Community cards smaller */
+      #community-area .playing-card {
+        width: 36px;
+        height: 50px;
+        min-width: 36px;
+        min-height: 50px;
+      }
+
+      #community-area .playing-card .card-rank-tl,
+      #community-area .playing-card .card-suit-br {
+        font-size: 0.5rem;
+      }
+
+      #community-area .playing-card .face-band {
+        font-size: 0.7rem;
+        height: 18px;
+      }
+
+      #community-area .pot-display {
+        font-size: 0.72rem;
+      }
+
+      /* Live review panel: full width below table */
+      #live-review-panel {
+        flex: none;
+        width: 100%;
+        max-height: 250px;
+      }
+
+      /* Sidebar: slide-in drawer from right */
+      #sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 280px;
+        height: 100vh;
+        border-radius: 0;
+        border-left: 1px solid #3a5a3a;
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+        z-index: 999;
+      }
+
+      #sidebar.open {
+        transform: translateX(0);
+      }
+
+      /* Backdrop when sidebar is open */
+      #sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 998;
+      }
+
+      #sidebar-backdrop.visible {
+        display: block;
+      }
+
+      /* Show the toggle FAB */
+      #sidebar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Countdown overlay smaller */
+      #countdown-number { font-size: 2rem; }
+      #countdown-label { font-size: 0.7rem; }
+      #inter-hand-countdown { padding: 0.8rem 1.2rem; }
+    }
+
+    /* Extra-small screens (≤ 420px) — further compaction */
+    @media (max-width: 420px) {
+      #table-wrapper {
+        padding: clamp(45px, 18vw, 70px) clamp(35px, 12vw, 55px);
+      }
+
+      .seat {
+        min-width: 58px;
+        max-width: 80px;
+        padding: 0.15rem 0.25rem;
+      }
+
+      .seat-name { font-size: 0.5rem; max-width: 65px; }
+      .seat-chips { font-size: 0.48rem; }
+      .seat-bet { font-size: 0.46rem; }
+
+      .seat-hole-cards .playing-card {
+        width: 20px;
+        height: 28px;
+        min-width: 20px;
+        min-height: 28px;
+      }
+
+      #community-area .playing-card {
+        width: 30px;
+        height: 42px;
+        min-width: 30px;
+        min-height: 42px;
+      }
+
+      #status-bar {
+        grid-template-columns: 1fr;
+        font-size: 0.72rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="main-content">
+
+    <div id="status-bar">
+      <div><span>Phase: </span><strong id="sb-phase">—</strong></div>
+      <div><span>Turn: </span><strong id="sb-turn">—</strong></div>
+      <div><span>Pot: </span><strong id="sb-pot">0</strong></div>
+      <div><span>Current Bet: </span><strong id="sb-bet">0</strong></div>
+      <div><span>Blinds: </span><strong id="sb-blinds">10/20</strong> <span id="sb-next-blinds" style="color:#aaa;font-size:0.8rem;margin-left:0.3rem"></span></div>
+      <a href="/leaderboard" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:600;margin-left:auto;">🏆 Leaderboard</a>
+      <a href="/faq" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:600;">❓ FAQ</a>
+      <div id="viewer-count-badge">👁 0 watching</div>
+    </div>
+
+    <!-- Table + live review panel side by side -->
+    <div id="table-and-review">
+
+      <div id="table-wrapper">
+        <!-- Oval poker table -->
+        <div id="poker-table">
+          <div id="community-area">
+            <div id="community-cards"></div>
+            <div class="pot-display">Pot: 0</div>
+          </div>
+
+          <!-- Inter-hand countdown overlay (hidden by default) -->
+          <div id="inter-hand-countdown">
+            <div id="countdown-number">10</div>
+            <div id="countdown-label">Next hand in…</div>
+          </div>
+        </div><!-- /#poker-table -->
+      </div>
+
+      <!-- Live review panel alongside the table -->
+      <div id="live-review-panel">
+        <h3 class="live-review-heading">Live AI Review</h3>
+        <div id="live-review-entries"></div>
+      </div>
+
+    </div>
+
+    <div id="messages"></div>
+
+  </div><!-- /#main-content -->
+
+  <!-- Sidebar: Log -->
+  <div id="sidebar">
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-log">Log</button>
+    </div>
+
+    <div id="log-panel">
+      <div id="log-list"></div>
+    </div>
+  </div>
+
+  <!-- Mobile sidebar toggle + backdrop -->
+  <button id="sidebar-toggle" aria-label="Toggle log panel">📋</button>
+  <div id="sidebar-backdrop"></div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script src="/static/arena.js"></script>
+  <script>
+    // Mobile sidebar drawer toggle
+    (function() {
+      var toggle = document.getElementById('sidebar-toggle');
+      var sidebar = document.getElementById('sidebar');
+      var backdrop = document.getElementById('sidebar-backdrop');
+
+      function openSidebar() {
+        sidebar.classList.add('open');
+        backdrop.classList.add('visible');
+      }
+
+      function closeSidebar() {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('visible');
+      }
+
+      toggle.addEventListener('click', function() {
+        if (sidebar.classList.contains('open')) closeSidebar();
+        else openSidebar();
+      });
+
+      backdrop.addEventListener('click', closeSidebar);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Arena Leaderboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a2e1a;
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 960px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #f0c040;
+      font-weight: 700;
+    }
+
+    .back-link {
+      color: #f0c040;
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 0.4rem 0.9rem;
+      border: 1px solid #f0c040;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .back-link:hover {
+      background: #f0c040;
+      color: #1a2e1a;
+    }
+
+    .section {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.8rem;
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+
+    #error-msg {
+      display: none;
+      background: rgba(224, 64, 64, 0.15);
+      border: 1px solid #e04040;
+      color: #ff6b6b;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 0.8rem;
+      font-size: 0.85rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 0.5rem 0.6rem;
+      border-bottom: 2px solid #3a5a3a;
+      color: #f0c040;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    tbody td {
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid #2a3e2a;
+    }
+
+    tbody tr:hover { background: rgba(240, 192, 64, 0.04); }
+
+    tbody tr.retired td { color: #888; }
+
+    .badge-retired {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: rgba(136, 136, 136, 0.2);
+      color: #999;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-active {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: rgba(126, 200, 126, 0.15);
+      color: #7ec87e;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .rank-cell { font-weight: 700; color: #f0c040; }
+
+    .model-name { font-weight: 600; }
+
+    .num { text-align: right; }
+
+    thead th.num { text-align: right; }
+
+    #no-data {
+      text-align: center;
+      padding: 2rem;
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 0.75rem; }
+
+      .header { flex-direction: column; gap: 0.6rem; align-items: flex-start; }
+
+      h1 { font-size: 1.2rem; }
+
+      table { font-size: 0.75rem; }
+
+      thead th { padding: 0.4rem; font-size: 0.68rem; white-space: nowrap; }
+
+      tbody td { padding: 0.4rem; white-space: nowrap; }
+
+      .section { padding: 0.6rem; }
+
+      .meta { flex-direction: column; gap: 0.3rem; font-size: 0.72rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>AI Arena Leaderboard</h1>
+      <a href="/arena" class="back-link">← Back to Arena</a>
+    </div>
+
+    <div id="error-msg"></div>
+
+    <div class="section">
+      <div class="meta">
+        <span id="last-updated"></span>
+        <span id="auto-refresh-note">Auto-refreshes every 30s</span>
+      </div>
+
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Model</th>
+            <th class="num">Games</th>
+            <th class="num">Wins</th>
+            <th class="num">Avg Placing</th>
+            <th class="num">Avg Latency (ms)</th>
+            <th class="num">Failure Rate (%)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+          <tr id="no-data"><td colspan="8">Loading…</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tbody = document.getElementById('leaderboard-body');
+    const errorMsg = document.getElementById('error-msg');
+    const lastUpdated = document.getElementById('last-updated');
+    let refreshTimer = null;
+
+    function fmt(val, decimals) {
+      if (val === null || val === undefined) return '—';
+      return Number(val).toFixed(decimals);
+    }
+
+    function renderTable(data) {
+      if (!data.length) {
+        tbody.innerHTML = '<tr id="no-data"><td colspan="8">No leaderboard data yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      data.forEach(function(entry, i) {
+        const tr = document.createElement('tr');
+        if (entry.retired) tr.className = 'retired';
+
+        const rank = i + 1;
+        const avgPlacing = fmt(entry.avg_placing, 1);
+        const avgLatency = fmt(entry.avg_latency_ms, 0);
+        const failRate = entry.failure_rate_pct !== null && entry.failure_rate_pct !== undefined
+          ? fmt(entry.failure_rate_pct, 1) + '%'
+          : '—';
+        const statusBadge = entry.retired
+          ? '<span class="badge-retired">Retired</span>'
+          : '<span class="badge-active">Active</span>';
+
+        tr.innerHTML =
+          '<td class="rank-cell">' + rank + '</td>' +
+          '<td class="model-name">' + escapeHtml(entry.display_name) + '</td>' +
+          '<td class="num">' + entry.games_played + '</td>' +
+          '<td class="num">' + entry.wins + '</td>' +
+          '<td class="num">' + avgPlacing + '</td>' +
+          '<td class="num">' + avgLatency + '</td>' +
+          '<td class="num">' + failRate + '</td>' +
+          '<td>' + statusBadge + '</td>';
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+
+    function hideError() {
+      errorMsg.style.display = 'none';
+    }
+
+    function fetchLeaderboard() {
+      fetch('/api/leaderboard')
+        .then(function(res) {
+          if (!res.ok) throw new Error('Server returned ' + res.status);
+          return res.json();
+        })
+        .then(function(data) {
+          hideError();
+          renderTable(data);
+          lastUpdated.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+        })
+        .catch(function(err) {
+          showError('Failed to load leaderboard data. ' + err.message);
+        });
+    }
+
+    // Initial fetch
+    fetchLeaderboard();
+
+    // Auto-refresh every 30 seconds
+    refreshTimer = setInterval(fetchLeaderboard, 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "*"
+flask-socketio = "*"
+eventlet = "*"
+openrouter = "*"
+psycopg2-binary = "*"
+
+[dev-packages]
+pytest = "*"
+hypothesis = "*"
+freezegun = "*"
+
+[requires]
+python_version = "3.11"
