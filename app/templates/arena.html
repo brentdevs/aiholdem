@@ -151,20 +151,20 @@
 
     /* Scale cards down inside community area */
     #community-area .playing-card {
-      width: clamp(42px, 4vw, 68px);
-      height: clamp(58px, 5.5vw, 96px);
-      min-width: clamp(42px, 4vw, 68px);
-      min-height: clamp(58px, 5.5vw, 96px);
+      width: var(--community-card-width, clamp(42px, 4vw, 68px));
+      height: var(--community-card-height, clamp(58px, 5.5vw, 96px));
+      min-width: var(--community-card-width, clamp(42px, 4vw, 68px));
+      min-height: var(--community-card-height, clamp(58px, 5.5vw, 96px));
     }
 
     #community-area .playing-card .card-rank-tl,
     #community-area .playing-card .card-suit-br {
-      font-size: clamp(0.6rem, 0.7vw, 0.9rem);
+      font-size: var(--community-card-corner-size, clamp(0.6rem, 0.7vw, 0.9rem));
     }
 
     #community-area .playing-card .face-band {
-      font-size: clamp(0.85rem, 1vw, 1.3rem);
-      height: clamp(22px, 2.5vw, 36px);
+      font-size: var(--community-card-face-size, clamp(0.85rem, 1vw, 1.3rem));
+      height: var(--community-card-face-height, clamp(22px, 2.5vw, 36px));
     }
 
     /* Card styles */
@@ -283,13 +283,13 @@
     .seat {
       position: absolute;
       transform: translate(-50%, -50%);
-      min-width: clamp(80px, 9vw, 140px);
-      max-width: clamp(100px, 11vw, 155px);
+      width: var(--seat-width, clamp(80px, 9vw, 140px));
+      max-width: var(--seat-width, clamp(100px, 11vw, 155px));
       background: rgba(20, 40, 20, 0.88);
       border: 2px solid #3a5a3a;
       border-radius: 10px;
       padding: 0.3rem 0.45rem;
-      font-size: clamp(0.55rem, 0.8vw, 0.85rem);
+      font-size: var(--seat-font-size, clamp(0.55rem, 0.8vw, 0.85rem));
       color: #e8e8e8;
       transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
       z-index: 10;
@@ -318,16 +318,19 @@
 
     .seat-name {
       font-weight: 700;
-      font-size: clamp(0.62rem, 0.75vw, 0.88rem);
-      white-space: nowrap;
+      font-size: var(--seat-name-size, clamp(0.62rem, 0.75vw, 0.88rem));
+      line-height: 1.15;
+      white-space: normal;
       overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: clamp(90px, 10vw, 150px);
+      max-width: 100%;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
 
-    .seat-chips { color: #aaa; font-size: clamp(0.58rem, 0.68vw, 0.8rem); }
+    .seat-chips { color: #aaa; font-size: var(--seat-detail-size, clamp(0.58rem, 0.68vw, 0.8rem)); }
 
-    .seat-bet { color: #f0c040; font-size: clamp(0.56rem, 0.65vw, 0.78rem); }
+    .seat-bet { color: #f0c040; font-size: var(--seat-detail-size, clamp(0.56rem, 0.65vw, 0.78rem)); }
 
     .dealer-btn {
       position: absolute;
@@ -354,22 +357,22 @@
       justify-content: center;
     }
 
-    /* Scale cards in seats with viewport */
+    /* Scale cards in seats with the table area, falling back to viewport sizing */
     .seat-hole-cards .playing-card {
-      width: clamp(30px, 2.8vw, 50px);
-      height: clamp(42px, 4vw, 70px);
-      min-width: clamp(30px, 2.8vw, 50px);
-      min-height: clamp(42px, 4vw, 70px);
+      width: var(--seat-card-width, clamp(30px, 2.8vw, 50px));
+      height: var(--seat-card-height, clamp(42px, 4vw, 70px));
+      min-width: var(--seat-card-width, clamp(30px, 2.8vw, 50px));
+      min-height: var(--seat-card-height, clamp(42px, 4vw, 70px));
     }
 
     .seat-hole-cards .playing-card .card-rank-tl,
     .seat-hole-cards .playing-card .card-suit-br {
-      font-size: clamp(0.48rem, 0.55vw, 0.72rem);
+      font-size: var(--seat-card-corner-size, clamp(0.48rem, 0.55vw, 0.72rem));
     }
 
     .seat-hole-cards .playing-card .face-band {
-      font-size: clamp(0.65rem, 0.78vw, 1rem);
-      height: clamp(14px, 1.6vw, 24px);
+      font-size: var(--seat-card-face-size, clamp(0.65rem, 0.78vw, 1rem));
+      height: var(--seat-card-face-height, clamp(14px, 1.6vw, 24px));
     }
 
     /* AI turn timer */
@@ -557,12 +560,46 @@
     #table-wrapper {
       flex: 1 1 0;
       min-width: 0;
+      container-type: inline-size;
+      --community-card-width: clamp(42px, 4vw, 68px);
+      --community-card-height: clamp(58px, 5.5vw, 96px);
+      --community-card-corner-size: clamp(0.6rem, 0.7vw, 0.9rem);
+      --community-card-face-size: clamp(0.85rem, 1vw, 1.3rem);
+      --community-card-face-height: clamp(22px, 2.5vw, 36px);
+      --seat-width: clamp(110px, 10vw, 165px);
+      --seat-font-size: clamp(0.55rem, 0.8vw, 0.85rem);
+      --seat-name-size: clamp(0.62rem, 0.75vw, 0.88rem);
+      --seat-detail-size: clamp(0.58rem, 0.68vw, 0.8rem);
+      --seat-card-width: clamp(34px, 3vw, 52px);
+      --seat-card-height: clamp(48px, 4.2vw, 73px);
+      --seat-card-corner-size: clamp(0.48rem, 0.55vw, 0.72rem);
+      --seat-card-face-size: clamp(0.65rem, 0.78vw, 1rem);
+      --seat-card-face-height: clamp(14px, 1.6vw, 24px);
       display: flex;
       flex-direction: column;
       align-items: center;
       /* Padding gives absolutely-positioned seats room to overflow without clipping.
          Scales with viewport so large screens get proportionally more breathing room. */
       padding: clamp(70px, 10vw, 140px) clamp(90px, 12vw, 180px);
+    }
+
+    @supports (width: 1cqw) {
+      #table-wrapper {
+        --community-card-width: clamp(42px, 7cqw, 68px);
+        --community-card-height: clamp(58px, 9.8cqw, 96px);
+        --community-card-corner-size: clamp(0.6rem, 1.05cqw, 0.9rem);
+        --community-card-face-size: clamp(0.85rem, 1.45cqw, 1.3rem);
+        --community-card-face-height: clamp(22px, 3.6cqw, 36px);
+        --seat-width: clamp(110px, 15cqw, 170px);
+        --seat-font-size: clamp(0.55rem, 1.1cqw, 0.85rem);
+        --seat-name-size: clamp(0.58rem, 1.15cqw, 0.86rem);
+        --seat-detail-size: clamp(0.54rem, 1cqw, 0.78rem);
+        --seat-card-width: clamp(34px, 5.2cqw, 54px);
+        --seat-card-height: clamp(48px, 7.3cqw, 76px);
+        --seat-card-corner-size: clamp(0.44rem, 0.85cqw, 0.72rem);
+        --seat-card-face-size: clamp(0.6rem, 1.2cqw, 1rem);
+        --seat-card-face-height: clamp(13px, 2.3cqw, 24px);
+      }
     }
 
     /* Mobile sidebar toggle button — hidden on desktop */
@@ -583,6 +620,61 @@
       cursor: pointer;
       box-shadow: 0 2px 12px rgba(0,0,0,0.5);
       line-height: 1;
+    }
+
+    /* Laptop/tablet landscape: keep the table from fighting the review panel */
+    @media (max-width: 1280px) {
+      #table-and-review {
+        flex-direction: column;
+      }
+
+      #table-wrapper {
+        padding: clamp(60px, 8vw, 100px) clamp(45px, 6vw, 90px);
+      }
+
+      #live-review-panel {
+        flex: none;
+        width: 100%;
+        max-height: 220px;
+      }
+
+      /* Sidebar: slide-in drawer from right */
+      #sidebar {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 280px;
+        height: 100vh;
+        border-radius: 0;
+        border-left: 1px solid #3a5a3a;
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+        z-index: 999;
+      }
+
+      #sidebar.open {
+        transform: translateX(0);
+      }
+
+      /* Backdrop when sidebar is open */
+      #sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 998;
+      }
+
+      #sidebar-backdrop.visible {
+        display: block;
+      }
+
+      /* Show the toggle FAB */
+      #sidebar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
     }
 
     /* ------------------------------------------------------------------ */
@@ -619,6 +711,7 @@
       }
 
       #table-wrapper {
+        --seat-width: clamp(68px, 18cqw, 95px);
         padding: clamp(55px, 16vw, 90px) clamp(50px, 14vw, 80px);
       }
 
@@ -699,44 +792,6 @@
         max-height: 250px;
       }
 
-      /* Sidebar: slide-in drawer from right */
-      #sidebar {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 280px;
-        height: 100vh;
-        border-radius: 0;
-        border-left: 1px solid #3a5a3a;
-        transform: translateX(100%);
-        transition: transform 0.25s ease;
-        z-index: 999;
-      }
-
-      #sidebar.open {
-        transform: translateX(0);
-      }
-
-      /* Backdrop when sidebar is open */
-      #sidebar-backdrop {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.5);
-        z-index: 998;
-      }
-
-      #sidebar-backdrop.visible {
-        display: block;
-      }
-
-      /* Show the toggle FAB */
-      #sidebar-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
       /* Countdown overlay smaller */
       #countdown-number { font-size: 2rem; }
       #countdown-label { font-size: 0.7rem; }
@@ -746,6 +801,7 @@
     /* Extra-small screens (≤ 420px) — further compaction */
     @media (max-width: 420px) {
       #table-wrapper {
+        --seat-width: clamp(58px, 20cqw, 80px);
         padding: clamp(45px, 18vw, 70px) clamp(35px, 12vw, 55px);
       }
 
