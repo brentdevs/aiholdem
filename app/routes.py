@@ -3,8 +3,8 @@ import logging
 
 from flask import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
 
-from app.ai.ollama_player import SUPPORTED_OLLAMA_MODELS
-from app.ai.openrouter_player import SUPPORTED_MODELS
+from app.ai.model_config import get_supported_model_configs
+from app.arena.arena_manager import ARENA_PLAYER_CONFIGS
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +61,22 @@ def api_leaderboard():
 
 @bp.route("/models")
 def get_models():
+    supported_configs = get_supported_model_configs()
+    supported = [config.as_dict() for config in supported_configs]
+    arena_players = [config.as_dict() for config in ARENA_PLAYER_CONFIGS]
     return jsonify({
-        "models": SUPPORTED_MODELS + SUPPORTED_OLLAMA_MODELS,
+        "models": supported,
+        "arena_players": arena_players,
         "backends": {
-            "openrouter": SUPPORTED_MODELS,
-            "ollama": SUPPORTED_OLLAMA_MODELS,
+            "openrouter": [
+                config.as_dict()
+                for config in supported_configs
+                if config.backend == "openrouter"
+            ],
+            "ollama": [
+                config.as_dict()
+                for config in supported_configs
+                if config.backend == "ollama"
+            ],
         },
     })

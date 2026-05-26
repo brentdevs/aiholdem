@@ -14,3 +14,15 @@ def client():
 def test_arena_route_returns_200(client):
     response = client.get("/arena")
     assert response.status_code == 200
+
+
+def test_models_route_returns_structured_model_config(client):
+    response = client.get("/models")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["models"]
+    assert data["arena_players"]
+    assert set(data["backends"]) == {"openrouter", "ollama"}
+    first = data["models"][0]
+    assert {"backend", "model", "display_name"} <= set(first)

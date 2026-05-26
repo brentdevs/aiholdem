@@ -11,19 +11,17 @@ import eventlet
 from app.game.game_session import GameSession, STARTING_CHIPS, BLIND_SCHEDULE
 from app.game.models import SessionStatus, ActionType
 from app.game.players import AIPlayer
-from app.ai.ollama_player import OllamaCloudPlayer, SUPPORTED_OLLAMA_MODELS
+from app.ai.model_config import ModelConfig, load_arena_player_configs
+from app.ai.ollama_player import OllamaCloudPlayer
 from app.ai.openrouter_player import OpenRouterPlayer
 
 logger = logging.getLogger(__name__)
 
 ARENA_SESSION_ID = "arena"
 
-ARENA_PLAYER_CONFIGS: list[dict[str, str]] = [
-    {"backend": "ollama", "model": model}
-    for model in SUPPORTED_OLLAMA_MODELS
-]
+ARENA_PLAYER_CONFIGS: list[ModelConfig] = load_arena_player_configs()
 
-ARENA_PLAYER_MODELS: list[str] = [config["model"] for config in ARENA_PLAYER_CONFIGS]
+ARENA_PLAYER_MODELS: list[str] = [config.model for config in ARENA_PLAYER_CONFIGS]
 
 
 class ArenaManager:
@@ -454,8 +452,8 @@ class ArenaManager:
         session = GameSession(ARENA_SESSION_ID, "arena")
         session.profiling_service = self.profiling_service
         for config in ARENA_PLAYER_CONFIGS:
-            model = config["model"]
-            backend = config["backend"]
+            model = config.model
+            backend = config.backend
             # Use model-based player_id so profiling stats stay tied to the model,
             # not the slot index. Swapping a model starts with a clean profile.
             safe_model = model.replace("/", "_").replace(":", "_").replace(".", "_")
