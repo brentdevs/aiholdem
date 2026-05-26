@@ -149,6 +149,7 @@ class OllamaCloudPlayer(AIPlayer):
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
                     stream=False,
+                    think=False,
                 )
             call_elapsed_ms = int((time.monotonic() - call_start) * 1000)
             self.game_total_latency_ms += call_elapsed_ms

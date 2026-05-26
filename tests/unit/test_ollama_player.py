@@ -101,6 +101,7 @@ def test_decide_action_uses_ollama_cloud_client_and_model(monkeypatch):
     call_kwargs = mock_client.chat.call_args.kwargs
     assert call_kwargs["model"] == SUPPORTED_OLLAMA_MODELS[2]
     assert call_kwargs["stream"] is False
+    assert call_kwargs["think"] is False
     assert action.type == ActionType.CHECK
     assert reasoning == "No bet to call."
 
