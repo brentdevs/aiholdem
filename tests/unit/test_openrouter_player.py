@@ -12,6 +12,7 @@ from app.ai.openrouter_player import (
     _derive_display_name,
     _extract_reasoning,
     _parse_action,
+    _parse_json_response,
     _serialize_history,
 )
 from app.game.models import Action, ActionType
@@ -231,6 +232,40 @@ def test_parse_action_raise_with_amount():
     assert result.amount == 80
 
 
+def test_parse_action_raise_allows_total_above_remaining_chips_when_already_in():
+    valid = [
+        Action(type=ActionType.RAISE, amount=300),
+        Action(type=ActionType.ALL_IN, amount=250),
+    ]
+    result = _parse_action(
+        "raise 300",
+        valid,
+        100,
+        player_chips=250,
+        player_round_contrib=100,
+    )
+    assert result is not None
+    assert result.type == ActionType.RAISE
+    assert result.amount == 300
+
+
+def test_parse_action_raise_converts_to_all_in_when_total_exceeds_stack_plus_already_in():
+    valid = [
+        Action(type=ActionType.RAISE, amount=300),
+        Action(type=ActionType.ALL_IN, amount=250),
+    ]
+    result = _parse_action(
+        "raise 400",
+        valid,
+        100,
+        player_chips=250,
+        player_round_contrib=100,
+    )
+    assert result is not None
+    assert result.type == ActionType.ALL_IN
+    assert result.amount == 250
+
+
 def test_parse_action_raise_defaults_to_min_raise():
     valid = [Action(type=ActionType.RAISE, amount=40)]
     result = _parse_action("raise", valid, 20)
@@ -257,6 +292,44 @@ def test_parse_action_no_match_returns_none():
     valid = _valid_actions_all()
     result = _parse_action("I have no idea what to do", valid, 20)
     assert result is None
+
+
+def test_parse_json_response_raise_allows_total_above_remaining_chips_when_already_in():
+    valid = [
+        Action(type=ActionType.RAISE, amount=300),
+        Action(type=ActionType.ALL_IN, amount=250),
+    ]
+    result = _parse_json_response(
+        '{"action": "raise", "amount": 300, "reasoning": "Pressure the field."}',
+        valid,
+        100,
+        player_chips=250,
+        player_round_contrib=100,
+    )
+    assert result is not None
+    action, reasoning = result
+    assert action.type == ActionType.RAISE
+    assert action.amount == 300
+    assert reasoning == "Pressure the field."
+
+
+def test_parse_json_response_raise_converts_to_all_in_when_total_exceeds_stack_plus_already_in():
+    valid = [
+        Action(type=ActionType.RAISE, amount=300),
+        Action(type=ActionType.ALL_IN, amount=250),
+    ]
+    result = _parse_json_response(
+        '{"action": "raise", "amount": 400, "reasoning": "Maximum pressure."}',
+        valid,
+        100,
+        player_chips=250,
+        player_round_contrib=100,
+    )
+    assert result is not None
+    action, reasoning = result
+    assert action.type == ActionType.ALL_IN
+    assert action.amount == 250
+    assert reasoning == "Maximum pressure."
 
 
 # ---------------------------------------------------------------------------

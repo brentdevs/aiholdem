@@ -274,6 +274,7 @@ def _parse_json_response(
     valid_actions: list[Action],
     min_raise: int,
     player_chips: int = 0,
+    player_round_contrib: int = 0,
 ) -> tuple[Action, str] | None:
     """Parse a JSON response from the LLM into an (Action, reasoning) tuple.
 
@@ -330,8 +331,9 @@ def _parse_json_response(
             raise_amount = int(amount) if amount is not None else min_raise
         except (TypeError, ValueError):
             raise_amount = min_raise
-        # If the raise exceeds the player's stack, convert to all-in
-        if player_chips > 0 and raise_amount > player_chips:
+        # Raise amount is the total bet level for this round, not extra chips.
+        max_raise_total = player_round_contrib + player_chips
+        if player_chips > 0 and raise_amount > max_raise_total:
             if ActionType.ALL_IN in valid_types:
                 for a in valid_actions:
                     if a.type == ActionType.ALL_IN:
@@ -351,6 +353,7 @@ def _parse_action(
     valid_actions: list[Action],
     min_raise: int,
     player_chips: int = 0,
+    player_round_contrib: int = 0,
 ) -> Action | None:
     """Map LLM text response to an Action via keyword matching.
 
@@ -398,8 +401,9 @@ def _parse_action(
                 if action_type == ActionType.RAISE:
                     match = re.search(r"raise\s+(\d+)", text_lower) or re.search(r"raise\s+(\d+)", text.lower())
                     amount = int(match.group(1)) if match else min_raise
-                    # If the raise exceeds the player's stack, convert to all-in
-                    if player_chips > 0 and amount > player_chips:
+                    # Raise amount is the total bet level for this round, not extra chips.
+                    max_raise_total = player_round_contrib + player_chips
+                    if player_chips > 0 and amount > max_raise_total:
                         if ActionType.ALL_IN in valid_types:
                             for a in valid_actions:
                                 if a.type == ActionType.ALL_IN:
@@ -507,7 +511,14 @@ class OpenRouterPlayer(AIPlayer):
                 {},
             )
             player_chips = self_player.get("chips", 0)
-            result = _parse_json_response(text, valid_actions, min_raise, player_chips=player_chips)
+            player_round_contrib = self_player.get("current_bet", 0)
+            result = _parse_json_response(
+                text,
+                valid_actions,
+                min_raise,
+                player_chips=player_chips,
+                player_round_contrib=player_round_contrib,
+            )
             if result is not None:
                 action, reasoning = result
                 logger.debug(
@@ -516,7 +527,13 @@ class OpenRouterPlayer(AIPlayer):
                 )
                 return (action, reasoning)
             # Fallback: keyword parsing
-            action = _parse_action(text, valid_actions, min_raise, player_chips=player_chips)
+            action = _parse_action(
+                text,
+                valid_actions,
+                min_raise,
+                player_chips=player_chips,
+                player_round_contrib=player_round_contrib,
+            )
             if action is not None:
                 logger.debug(
                     "OpenRouterPlayer action decided (keyword) session=%s player=%s action=%s amount=%s",

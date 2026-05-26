@@ -164,7 +164,14 @@ class OllamaCloudPlayer(AIPlayer):
                 {},
             )
             player_chips = self_player.get("chips", 0)
-            result = _parse_json_response(text, valid_actions, min_raise, player_chips=player_chips)
+            player_round_contrib = self_player.get("current_bet", 0)
+            result = _parse_json_response(
+                text,
+                valid_actions,
+                min_raise,
+                player_chips=player_chips,
+                player_round_contrib=player_round_contrib,
+            )
             if result is not None:
                 action, reasoning = result
                 logger.debug(
@@ -173,7 +180,13 @@ class OllamaCloudPlayer(AIPlayer):
                 )
                 return (action, reasoning)
 
-            action = _parse_action(text, valid_actions, min_raise, player_chips=player_chips)
+            action = _parse_action(
+                text,
+                valid_actions,
+                min_raise,
+                player_chips=player_chips,
+                player_round_contrib=player_round_contrib,
+            )
             if action is not None:
                 logger.debug(
                     "OllamaCloudPlayer action decided (keyword) session=%s player=%s action=%s amount=%s",
