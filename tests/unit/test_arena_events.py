@@ -23,6 +23,27 @@ def _make_mock_session():
     return mock_session
 
 
+def _make_mock_arena_state():
+    return {
+        "session_id": "arena",
+        "status": "active",
+        "players": [
+            {
+                "player_id": "p1",
+                "name": "AI 1",
+                "hole_cards": [
+                    {"rank": 14, "suit": "S"},
+                    {"rank": 13, "suit": "H"},
+                ],
+            }
+        ],
+        "community_cards": [],
+        "pot": 0,
+        "phase": "pre_flop",
+        "live_move_logs": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # 9.1 — join_arena emits arena_state to the joining socket
 # ---------------------------------------------------------------------------
@@ -36,6 +57,7 @@ def test_join_arena_emits_state():
 
     with patch("app.events.arena_manager") as mock_manager:
         mock_manager.get_or_create_session.return_value = mock_session
+        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
         mock_manager.on_viewer_join.return_value = None
         mock_manager.broadcast_viewer_count.return_value = None
 
@@ -51,6 +73,30 @@ def test_join_arena_emits_state():
     assert "arena_state" in event_names, f"Expected 'arena_state' in {event_names}"
 
 
+def test_join_arena_emits_serialized_arena_state_with_hole_cards():
+    """Initial join uses ArenaManager's arena serializer, including hole cards."""
+    mock_session = _make_mock_session()
+    arena_state = _make_mock_arena_state()
+
+    with patch("app.events.arena_manager") as mock_manager:
+        mock_manager.get_or_create_session.return_value = mock_session
+        mock_manager.get_arena_state.return_value = arena_state
+        mock_manager.on_viewer_join.return_value = None
+        mock_manager.broadcast_viewer_count.return_value = None
+
+        client = socketio.test_client(_app)
+        try:
+            client.get_received()
+            client.emit("join_arena", {})
+            received = client.get_received()
+        finally:
+            client.disconnect()
+
+    mock_manager.get_arena_state.assert_called_once()
+    emitted_state = next(e["args"][0] for e in received if e["name"] == "arena_state")
+    assert emitted_state["players"][0]["hole_cards"] == arena_state["players"][0]["hole_cards"]
+
+
 # ---------------------------------------------------------------------------
 # 8.4 / 9.3 — join_arena increments viewer count
 # ---------------------------------------------------------------------------
@@ -64,6 +110,7 @@ def test_join_arena_increments_viewer_count():
 
     with patch("app.events.arena_manager") as mock_manager:
         mock_manager.get_or_create_session.return_value = mock_session
+        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
         mock_manager.on_viewer_join.return_value = None
         mock_manager.broadcast_viewer_count.return_value = None
 
@@ -90,6 +137,7 @@ def test_disconnect_decrements_viewer_count():
 
     with patch("app.events.arena_manager") as mock_manager:
         mock_manager.get_or_create_session.return_value = mock_session
+        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
         mock_manager.on_viewer_join.return_value = None
         mock_manager.broadcast_viewer_count.return_value = None
         mock_manager.on_viewer_leave.return_value = None
@@ -127,6 +175,7 @@ def test_join_arena_resumes_paused_arena():
     with patch("app.events.arena_manager") as mock_manager:
         mock_manager.paused = True
         mock_manager.get_or_create_session.return_value = mock_session
+        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
         mock_manager.on_viewer_join.return_value = None
         mock_manager.broadcast_viewer_count.return_value = None
 

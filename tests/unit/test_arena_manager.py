@@ -65,6 +65,18 @@ def test_all_players_are_ai():
         assert hasattr(player, "provider"), f"Player {player.player_id} missing 'provider' attribute"
 
 
+def test_arena_state_reveals_hole_cards_during_live_hand():
+    """Arena spectator state includes all AI hole cards before showdown."""
+    manager = make_arena_manager()
+    session = manager.get_or_create_session()
+
+    state = manager.get_arena_state()
+
+    assert len(state["players"]) == len(session.players)
+    for player_entry in state["players"]:
+        assert len(player_entry["hole_cards"]) == 2
+
+
 # ---------------------------------------------------------------------------
 # Viewer count tracking (Requirements 8.4)
 # ---------------------------------------------------------------------------

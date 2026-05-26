@@ -31,8 +31,8 @@ def on_join_arena(data: dict) -> None:
     join_room(ARENA_SESSION_ID)
     join_room(request.sid)
     arena_manager.on_viewer_join(request.sid)
-    session = arena_manager.get_or_create_session()
-    emit("arena_state", session.get_public_state())
+    arena_manager.get_or_create_session()
+    emit("arena_state", arena_manager.get_arena_state())
     arena_manager.broadcast_viewer_count()
 
 

@@ -77,6 +77,18 @@ class ArenaManager:
         from app import socketio
         if self.session is None:
             return
+        state = self.get_arena_state()
+        socketio.emit("arena_state", state, room=ARENA_SESSION_ID)
+
+    def get_arena_state(self) -> dict:
+        """Return spectator state for the all-AI arena.
+
+        Unlike the generic public state, arena spectators can see every AI
+        player's hole cards throughout the hand.
+        """
+        if self.session is None:
+            return {}
+
         state = self.session.get_public_state()
         # Always expose hole cards for all players (arena is all-AI, no privacy needed)
         player_map = {p.player_id: p for p in self.session.players}
@@ -97,7 +109,7 @@ class ArenaManager:
             }
             for log in self.session._hand_move_logs
         ]
-        socketio.emit("arena_state", state, room=ARENA_SESSION_ID)
+        return state
 
     def broadcast_viewer_count(self) -> None:
         """Emit arena_viewer_count with current count to the arena room."""

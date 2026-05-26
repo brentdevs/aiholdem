@@ -230,6 +230,7 @@ def test_spectator_join_emits_state(viewer_count):
 
     with patch("app.events.arena_manager") as mock_manager:
         mock_manager.get_or_create_session.return_value = mock_session
+        mock_manager.get_arena_state.return_value = expected_state
         mock_manager.on_viewer_join.return_value = None
         mock_manager.broadcast_viewer_count.return_value = None
 
