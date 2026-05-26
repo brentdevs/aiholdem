@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import uuid
 from datetime import datetime
 
@@ -348,10 +349,13 @@ class GameSession:
             [p.player_id for p in non_eliminated],
         )
 
-        # Advance dealer button over non-eliminated players
-        self.dealer_button_index = self._dealer.advance_dealer_button(
-            self.dealer_button_index, len(non_eliminated)
-        )
+        # Randomize the initial dealer, then rotate normally on later hands.
+        if self.hand_number == 1:
+            self.dealer_button_index = random.randrange(len(non_eliminated))
+        else:
+            self.dealer_button_index = self._dealer.advance_dealer_button(
+                self.dealer_button_index, len(non_eliminated)
+            )
 
         # Reset pot manager
         self._pot_manager = PotManager()

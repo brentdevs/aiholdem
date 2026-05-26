@@ -80,6 +80,32 @@ def test_hole_cards_unique():
     assert len(all_cards) == len(set(all_cards))
 
 
+def test_initial_dealer_is_randomized_then_rotates(monkeypatch):
+    session = make_session_with_players(4)
+    calls = []
+
+    def choose_initial_dealer(num_players):
+        calls.append(num_players)
+        return 2
+
+    monkeypatch.setattr(
+        "app.game.game_session.random.randrange",
+        choose_initial_dealer,
+    )
+
+    session.start_game()
+
+    assert calls == [4]
+    assert session.dealer_button_index == 2
+    assert session.get_public_state()["dealer_button"] == 2
+
+    session._start_hand()
+
+    assert calls == [4]
+    assert session.dealer_button_index == 3
+    assert session.get_public_state()["dealer_button"] == 3
+
+
 # ---------------------------------------------------------------------------
 # Actions
 # ---------------------------------------------------------------------------
@@ -206,15 +232,20 @@ def test_game_session_move_log_append():
     # Force the AI player to be the current player
     hand.current_player_id = "ai1"
 
-    reasoning = "I have a strong hand, raising to build the pot."
-    session.apply_action("ai1", Action(type=ActionType.CHECK), reasoning=reasoning)
+    valid = session.get_valid_actions(session.players[1])
+    chosen = next((a for a in valid if a.type == ActionType.CHECK), valid[0])
+
+    reasoning = "I have a strong hand."
+    session.apply_action("ai1", chosen, reasoning=reasoning)
 
     assert len(session._hand_move_logs) == 1
     log = session._hand_move_logs[0]
     assert log.player_name == "AIai1"
     assert log.phase == Phase.PRE_FLOP.value
-    assert log.action == ActionType.CHECK.value
-    assert log.amount is None
+    assert log.action == chosen.type.value
+    assert log.amount == (
+        chosen.amount if chosen.type in (ActionType.RAISE, ActionType.ALL_IN) else None
+    )
     assert log.reasoning == reasoning
 
 
