@@ -33,7 +33,7 @@ class AIPlayer(Player):
         provider: str,
     ) -> None:
         super().__init__(player_id, name, chips)
-        self.provider = provider  # "openai" or "anthropic"
+        self.provider = provider  # e.g. "openrouter" or "ollama"
 
     def decide_action(self, game_state: dict, valid_actions: list[Action]) -> Action:
         raise NotImplementedError

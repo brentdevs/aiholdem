@@ -47,7 +47,7 @@ def test_session_id_is_arena():
 # ---------------------------------------------------------------------------
 
 def test_arena_players_match_models():
-    """Session has exactly 5 players whose models match ARENA_PLAYER_MODELS."""
+    """Session players match ARENA_PLAYER_MODELS."""
     manager = make_arena_manager()
     with patch("app.arena.arena_manager.GameSession.start_game"):
         session = manager.get_or_create_session()

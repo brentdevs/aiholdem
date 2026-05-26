@@ -3,6 +3,7 @@ import logging
 
 from flask import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
 
+from app.ai.ollama_player import SUPPORTED_OLLAMA_MODELS
 from app.ai.openrouter_player import SUPPORTED_MODELS
 
 logger = logging.getLogger(__name__)
@@ -60,4 +61,10 @@ def api_leaderboard():
 
 @bp.route("/models")
 def get_models():
-    return jsonify({"models": SUPPORTED_MODELS})
+    return jsonify({
+        "models": SUPPORTED_MODELS + SUPPORTED_OLLAMA_MODELS,
+        "backends": {
+            "openrouter": SUPPORTED_MODELS,
+            "ollama": SUPPORTED_OLLAMA_MODELS,
+        },
+    })

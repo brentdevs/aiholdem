@@ -10,22 +10,20 @@ import eventlet
 
 from app.game.game_session import GameSession, STARTING_CHIPS, BLIND_SCHEDULE
 from app.game.models import SessionStatus, ActionType
+from app.game.players import AIPlayer
+from app.ai.ollama_player import OllamaCloudPlayer, SUPPORTED_OLLAMA_MODELS
 from app.ai.openrouter_player import OpenRouterPlayer
 
 logger = logging.getLogger(__name__)
 
 ARENA_SESSION_ID = "arena"
 
-ARENA_PLAYER_MODELS: list[str] = [
-    "google/gemini-2.5-flash",
-    "openai/gpt-4o-mini",
-    "deepseek/deepseek-v3.2",
-    "qwen/qwen3-235b-a22b-2507",
-    "anthropic/claude-3-haiku",
-    "mistralai/mistral-medium-3",
-    "meta-llama/llama-4-maverick",
-    "x-ai/grok-4.1-fast",
+ARENA_PLAYER_CONFIGS: list[dict[str, str]] = [
+    {"backend": "ollama", "model": model}
+    for model in SUPPORTED_OLLAMA_MODELS
 ]
+
+ARENA_PLAYER_MODELS: list[str] = [config["model"] for config in ARENA_PLAYER_CONFIGS]
 
 
 class ArenaManager:
@@ -185,14 +183,14 @@ class ArenaManager:
         if current is None:
             self._loop_running = False
             return
-        if not isinstance(current, OpenRouterPlayer):
+        if not isinstance(current, AIPlayer):
             self._loop_running = False
             return
 
         # Run the AI turn in a background task
         socketio.start_background_task(self._run_ai_turn, session, current)
 
-    def _run_ai_turn(self, session: GameSession, ai_player: OpenRouterPlayer) -> None:
+    def _run_ai_turn(self, session: GameSession, ai_player: AIPlayer) -> None:
         """Execute one AI turn, broadcast state, then chain to the next turn."""
         eventlet.sleep(0)  # yield to event loop
 
@@ -323,7 +321,7 @@ class ArenaManager:
                 placings = compute_placings(self._elimination_order)
                 results: list[GameResult] = []
                 for p in self.session.players:
-                    if isinstance(p, OpenRouterPlayer):
+                    if isinstance(p, AIPlayer) and hasattr(p, "model"):
                         results.append(GameResult(
                             model_id=p.model,
                             display_name=p.name,
@@ -387,19 +385,31 @@ class ArenaManager:
                 self._elimination_order.append(p.player_id)
 
     def _create_session(self) -> GameSession:
-        """Create GameSession with ARENA_SESSION_ID and five OpenRouterPlayers."""
+        """Create GameSession with ARENA_SESSION_ID and configured AI players."""
         self._elimination_order = []
         session = GameSession(ARENA_SESSION_ID, "arena")
         session.profiling_service = self.profiling_service
-        for i, model in enumerate(ARENA_PLAYER_MODELS):
+        for config in ARENA_PLAYER_CONFIGS:
+            model = config["model"]
+            backend = config["backend"]
             # Use model-based player_id so profiling stats stay tied to the model,
             # not the slot index. Swapping a model starts with a clean profile.
-            player_id = f"arena_{model.replace('/', '_')}"
-            player = OpenRouterPlayer(
-                player_id=player_id,
-                chips=STARTING_CHIPS,
-                model=model,
-            )
+            safe_model = model.replace("/", "_").replace(":", "_").replace(".", "_")
+            player_id = f"arena_{backend}_{safe_model}"
+            if backend == "ollama":
+                player = OllamaCloudPlayer(
+                    player_id=player_id,
+                    chips=STARTING_CHIPS,
+                    model=model,
+                )
+            elif backend == "openrouter":
+                player = OpenRouterPlayer(
+                    player_id=player_id,
+                    chips=STARTING_CHIPS,
+                    model=model,
+                )
+            else:
+                raise ValueError(f"Unsupported AI backend: {backend}")
             player.profiling_service = self.profiling_service
             player.reset_game_stats()
             session.add_player(player)
