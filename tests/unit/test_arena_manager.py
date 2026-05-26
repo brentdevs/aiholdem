@@ -198,6 +198,75 @@ def test_inter_hand_pause_pauses_when_no_viewers():
     assert manager.paused is True
 
 
+def test_showdown_dispatch_schedules_one_inter_hand_pause():
+    """Repeated showdown dispatches do not create duplicate pause tasks."""
+    import app as app_module
+    manager = make_arena_manager()
+    session = manager.get_or_create_session()
+    session.showdown_pending = True
+    manager.paused = False
+
+    mock_socketio = MagicMock()
+    with patch.object(app_module, "socketio", mock_socketio):
+        manager._dispatch_ai_turn(session)
+        manager._dispatch_ai_turn(session)
+
+    mock_socketio.start_background_task.assert_called_once_with(manager._inter_hand_pause)
+    assert manager._loop_running is False
+    assert manager._inter_hand_pause_running is True
+
+
+def test_complete_dispatch_schedules_one_reset():
+    """Repeated complete-session dispatches do not create duplicate reset tasks."""
+    import app as app_module
+    from app.game.models import SessionStatus
+
+    manager = make_arena_manager()
+    session = manager.get_or_create_session()
+    session.status = SessionStatus.COMPLETE
+    manager.paused = False
+
+    mock_socketio = MagicMock()
+    with patch.object(app_module, "socketio", mock_socketio):
+        manager._dispatch_ai_turn(session)
+        manager._dispatch_ai_turn(session)
+
+    mock_socketio.start_background_task.assert_called_once_with(manager._reset_after_complete)
+    assert manager._loop_running is False
+    assert manager._reset_running is True
+
+
+def test_viewer_join_during_transition_does_not_start_ai_loop():
+    """A reconnect during showdown pause does not start a competing AI loop."""
+    import app as app_module
+
+    manager = make_arena_manager()
+    manager.get_or_create_session()
+    manager._inter_hand_pause_running = True
+
+    mock_socketio = MagicMock()
+    with patch.object(app_module, "socketio", mock_socketio):
+        manager.on_viewer_join("sid1")
+
+    mock_socketio.start_background_task.assert_not_called()
+    assert manager.paused is False
+    assert manager._loop_running is False
+
+
+def test_paused_ai_turn_marks_loop_idle():
+    """If the arena pauses while a turn task is alive, it can resume later."""
+    manager = make_arena_manager()
+    session = manager.get_or_create_session()
+    ai_player = session.players[0]
+    manager._loop_running = True
+    manager.paused = True
+
+    with patch("app.arena.arena_manager.eventlet.sleep"):
+        manager._run_ai_turn(session, ai_player)
+
+    assert manager._loop_running is False
+
+
 def test_reset_creates_new_session():
     """_reset_after_complete replaces self.session with a new session."""
     manager = make_arena_manager()
