@@ -67,7 +67,7 @@ yarn-error.log*
 Thumbs.db
 
 # Docker
-*.dockerignore
+docker-compose.override.yml
 
 # Kiro IDE workspace
 .kiro/
