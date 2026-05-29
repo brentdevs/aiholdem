@@ -1,7 +1,9 @@
 """Unit tests for PotManager — blind posting, side pots, distribution."""
+
 import pytest
-from app.game.pot_manager import PotManager
+
 from app.game.players import Player
+from app.game.pot_manager import PotManager
 
 
 @pytest.fixture
@@ -16,6 +18,7 @@ def make_player(pid, chips):
 # ---------------------------------------------------------------------------
 # Blind posting
 # ---------------------------------------------------------------------------
+
 
 def test_post_blind_deducts_chips(pm):
     p = make_player("p1", 1000)
@@ -34,6 +37,7 @@ def test_post_blind_caps_at_stack(pm):
 # ---------------------------------------------------------------------------
 # Side pot creation
 # ---------------------------------------------------------------------------
+
 
 def test_side_pot_single_all_in(pm):
     p1 = make_player("p1", 1000)
@@ -57,6 +61,7 @@ def test_side_pot_single_all_in(pm):
 # ---------------------------------------------------------------------------
 # Distribution
 # ---------------------------------------------------------------------------
+
 
 def test_distribute_single_winner(pm):
     # Players start at 1000; place_bet deducts chips
@@ -96,9 +101,9 @@ def test_distribute_side_pot_winner(pm):
     p2 = make_player("p2", 1000)
     p3 = make_player("p3", 50)
 
-    pm.place_bet(p1, 50)   # p1: 950
-    pm.place_bet(p2, 50)   # p2: 950
-    pm.place_bet(p3, 50)   # p3: 0
+    pm.place_bet(p1, 50)  # p1: 950
+    pm.place_bet(p2, 50)  # p2: 950
+    pm.place_bet(p3, 50)  # p3: 0
 
     # All contributed 50 — single pot of 150, all eligible
     # p1 has best hand

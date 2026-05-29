@@ -1,4 +1,5 @@
 """WebSocket event handlers for the Texas Hold 'Em poker platform."""
+
 from __future__ import annotations
 
 import logging
@@ -7,7 +8,7 @@ from flask import request
 from flask_socketio import emit, join_room
 
 from app import socketio
-from app.arena.arena_manager import arena_manager, ARENA_SESSION_ID
+from app.arena.arena_manager import ARENA_SESSION_ID, arena_manager
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _emit_error(code: str, message: str) -> None:
     logger.warning("Emitting error code=%s message=%r", code, message)
@@ -24,6 +26,7 @@ def _emit_error(code: str, message: str) -> None:
 # ---------------------------------------------------------------------------
 # Arena spectator events
 # ---------------------------------------------------------------------------
+
 
 @socketio.on("join_arena")
 def on_join_arena(data: dict) -> None:
@@ -39,6 +42,7 @@ def on_join_arena(data: dict) -> None:
 # ---------------------------------------------------------------------------
 # Disconnection handling
 # ---------------------------------------------------------------------------
+
 
 @socketio.on("disconnect")
 def on_disconnect() -> None:

@@ -105,7 +105,10 @@ def compute_stat_flags(
                     three_bet = False
             else:
                 # Another player raised — check if target faces a 3-bet
-                if player_last_raise_count is not None and preflop_raise_count > player_last_raise_count:
+                if (
+                    player_last_raise_count is not None
+                    and preflop_raise_count > player_last_raise_count
+                ):
                     player_faced_three_bet = True
 
         elif action == "C" and is_target:
@@ -137,8 +140,9 @@ def compute_stat_flags(
     fold_to_cbet: bool | None = None
 
     # Check if flop actions exist
-    flop_actions = [(phase, pname, action, amt)
-                    for phase, pname, action, amt in actions if phase == "flop"]
+    flop_actions = [
+        (phase, pname, action, amt) for phase, pname, action, amt in actions if phase == "flop"
+    ]
 
     if not flop_actions:
         # Hand ended before flop — cbet and fold_to_cbet are NULL

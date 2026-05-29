@@ -2,8 +2,10 @@
 
 Requirements: 8.2, 9.1, 9.3, 9.6
 """
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app import socketio
 from tests.shared_app import _app
@@ -47,6 +49,7 @@ def _make_mock_arena_state():
 # ---------------------------------------------------------------------------
 # 9.1 — join_arena emits arena_state to the joining socket
 # ---------------------------------------------------------------------------
+
 
 def test_join_arena_emits_state():
     """Emitting join_arena causes the server to emit arena_state back.
@@ -101,6 +104,7 @@ def test_join_arena_emits_serialized_arena_state_with_hole_cards():
 # 8.4 / 9.3 — join_arena increments viewer count
 # ---------------------------------------------------------------------------
 
+
 def test_join_arena_increments_viewer_count():
     """Joining the arena increments the viewer count via on_viewer_join.
 
@@ -127,6 +131,7 @@ def test_join_arena_increments_viewer_count():
 # ---------------------------------------------------------------------------
 # 8.1 / 8.4 — disconnect decrements viewer count
 # ---------------------------------------------------------------------------
+
 
 def test_disconnect_decrements_viewer_count():
     """Disconnecting after joining calls on_viewer_leave to decrement viewer count.
@@ -164,6 +169,7 @@ def test_disconnect_decrements_viewer_count():
 # ---------------------------------------------------------------------------
 # 9.6 — join_arena resumes a paused arena
 # ---------------------------------------------------------------------------
+
 
 def test_join_arena_resumes_paused_arena():
     """When the arena is paused and a viewer joins, on_viewer_join is called (which sets paused=False).

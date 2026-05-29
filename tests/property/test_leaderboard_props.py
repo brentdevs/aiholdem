@@ -1,8 +1,9 @@
 # Feature: arena-leaderboard, Property 1: Placing computation from elimination order
 # Feature: arena-leaderboard, Property 2: Record game results preserves cumulative invariants
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from app.leaderboard.models import compute_placings, GameResult
+from app.leaderboard.models import GameResult, compute_placings
 
 
 @st.composite
@@ -37,6 +38,7 @@ def test_placing_computation_from_elimination_order(elimination_order: list[str]
 # ---------------------------------------------------------------------------
 # In-memory simulation of LeaderboardService upsert logic (no PostgreSQL needed)
 # ---------------------------------------------------------------------------
+
 
 class InMemoryLeaderboardService:
     """Mimics LeaderboardService upsert logic using a plain dict."""
@@ -81,6 +83,7 @@ class InMemoryLeaderboardService:
 # Strategy: generate a list of 2-8 GameResult objects with valid placings
 # ---------------------------------------------------------------------------
 
+
 @st.composite
 def game_results_strategy(draw):
     """Generate 2-8 GameResult objects with unique model_ids and valid 1..N placings."""
@@ -95,14 +98,16 @@ def game_results_strategy(draw):
         api_calls = draw(st.integers(min_value=0, max_value=100))
         api_failures = draw(st.integers(min_value=0, max_value=api_calls))
         total_latency_ms = draw(st.integers(min_value=0, max_value=10000))
-        results.append(GameResult(
-            model_id=model_ids[i],
-            display_name=f"Model {i}",
-            placing=shuffled_placings[i],
-            api_calls=api_calls,
-            api_failures=api_failures,
-            total_latency_ms=total_latency_ms,
-        ))
+        results.append(
+            GameResult(
+                model_id=model_ids[i],
+                display_name=f"Model {i}",
+                placing=shuffled_placings[i],
+                api_calls=api_calls,
+                api_failures=api_failures,
+                total_latency_ms=total_latency_ms,
+            )
+        )
     return results
 
 
@@ -160,14 +165,16 @@ def test_record_game_results_preserves_cumulative_invariants(
                 total_latency_ms=0,
             )
         # Assign placing from a valid 1..n1 sequence
-        round2_adjusted.append(GameResult(
-            model_id=r1.model_id,
-            display_name=r1.display_name,
-            placing=round2_placings[i],
-            api_calls=r2.api_calls,
-            api_failures=r2.api_failures,
-            total_latency_ms=r2.total_latency_ms,
-        ))
+        round2_adjusted.append(
+            GameResult(
+                model_id=r1.model_id,
+                display_name=r1.display_name,
+                placing=round2_placings[i],
+                api_calls=r2.api_calls,
+                api_failures=r2.api_failures,
+                total_latency_ms=r2.total_latency_ms,
+            )
+        )
 
     svc.record_game_results(round2_adjusted)
 
@@ -192,6 +199,7 @@ def test_record_game_results_preserves_cumulative_invariants(
 
 # --- Add sync_retired_status to InMemoryLeaderboardService ---
 # We monkey-patch the method onto the class so existing tests are unaffected.
+
 
 def _sync_retired_status(self, active_models: list[str]) -> None:
     """Mirror the real LeaderboardService.sync_retired_status logic in-memory.
@@ -278,13 +286,13 @@ def test_retired_status_sync_correctness(data):
     # Verify retired flags
     for model_id, row in svc._rows.items():
         if model_id in active_set:
-            assert row["retired"] is False, (
-                f"{model_id} is in active_models but retired={row['retired']}"
-            )
+            assert (
+                row["retired"] is False
+            ), f"{model_id} is in active_models but retired={row['retired']}"
         else:
-            assert row["retired"] is True, (
-                f"{model_id} is NOT in active_models but retired={row['retired']}"
-            )
+            assert (
+                row["retired"] is True
+            ), f"{model_id} is NOT in active_models but retired={row['retired']}"
 
 
 # ---------------------------------------------------------------------------
@@ -312,17 +320,19 @@ def leaderboard_entries_strategy(draw):
     n = draw(st.integers(min_value=2, max_value=10))
     entries = []
     for i in range(n):
-        entries.append({
-            "model_id": f"model_{i}",
-            "display_name": f"Model {i}",
-            "games_played": draw(st.integers(min_value=1, max_value=200)),
-            "wins": draw(st.integers(min_value=0, max_value=100)),
-            "placing_sum": draw(st.integers(min_value=1, max_value=500)),
-            "api_calls": draw(st.integers(min_value=0, max_value=1000)),
-            "api_failures": draw(st.integers(min_value=0, max_value=100)),
-            "latency_sum_ms": draw(st.integers(min_value=0, max_value=100000)),
-            "retired": draw(st.booleans()),
-        })
+        entries.append(
+            {
+                "model_id": f"model_{i}",
+                "display_name": f"Model {i}",
+                "games_played": draw(st.integers(min_value=1, max_value=200)),
+                "wins": draw(st.integers(min_value=0, max_value=100)),
+                "placing_sum": draw(st.integers(min_value=1, max_value=500)),
+                "api_calls": draw(st.integers(min_value=0, max_value=1000)),
+                "api_failures": draw(st.integers(min_value=0, max_value=100)),
+                "latency_sum_ms": draw(st.integers(min_value=0, max_value=100000)),
+                "retired": draw(st.booleans()),
+            }
+        )
     return entries
 
 
@@ -351,21 +361,19 @@ def test_leaderboard_sort_order(entries: list[dict]):
             retired_segment.append(row)
         else:
             # Once we've seen a retired model, no active model should follow
-            assert not seen_retired, (
-                f"Active model {row['model_id']} appears after retired models"
-            )
+            assert not seen_retired, f"Active model {row['model_id']} appears after retired models"
             active_segment.append(row)
 
     # Within active group, wins are descending
     active_wins = [r["wins"] for r in active_segment]
     for i in range(len(active_wins) - 1):
-        assert active_wins[i] >= active_wins[i + 1], (
-            f"Active group not sorted by wins desc: {active_wins}"
-        )
+        assert (
+            active_wins[i] >= active_wins[i + 1]
+        ), f"Active group not sorted by wins desc: {active_wins}"
 
     # Within retired group, wins are descending
     retired_wins = [r["wins"] for r in retired_segment]
     for i in range(len(retired_wins) - 1):
-        assert retired_wins[i] >= retired_wins[i + 1], (
-            f"Retired group not sorted by wins desc: {retired_wins}"
-        )
+        assert (
+            retired_wins[i] >= retired_wins[i + 1]
+        ), f"Retired group not sorted by wins desc: {retired_wins}"

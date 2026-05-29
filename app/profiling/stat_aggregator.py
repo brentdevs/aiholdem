@@ -105,9 +105,7 @@ def _compute_af(actions_rows: list[tuple], player_name: str) -> float:
 class StatAggregator:
     """Queries hand_players for a player's recent N hands and computes aggregate stats."""
 
-    def get_player_stats(
-        self, conn, player_id: str, window: int = 80
-    ) -> PlayerStats | None:
+    def get_player_stats(self, conn, player_id: str, window: int = 80) -> PlayerStats | None:
         """Compute aggregate stats for a player over the most recent *window* hands.
 
         Uses a single SQL query with AVG() and FILTER clauses for boolean stats,

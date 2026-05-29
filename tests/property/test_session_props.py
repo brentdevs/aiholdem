@@ -1,9 +1,12 @@
 """Property-based tests for GameSession."""
-from hypothesis import given, settings, strategies as st
-from app.game.game_session import GameSession, STARTING_CHIPS
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from app.game.dealer import Dealer
+from app.game.game_session import STARTING_CHIPS, GameSession
+from app.game.models import ActionType, Phase
 from app.game.players import Player
-from app.game.models import Phase, ActionType
 
 
 def make_player(pid, chips=STARTING_CHIPS):
@@ -32,6 +35,7 @@ def test_player_count_bounds(n):
     else:
         session.start_game()
         from app.game.models import SessionStatus
+
         assert session.status == SessionStatus.ACTIVE
 
 
@@ -122,18 +126,15 @@ def test_game_state_payload_completeness_and_privacy(n):
         # hole_cards of OTHER players must NOT appear in the payload
         # The payload must not contain a top-level key exposing other players' cards
         other_hole_cards = [
-            c
-            for p in session.players
-            if p.player_id != player.player_id
-            for c in p.hole_cards
+            c for p in session.players if p.player_id != player.player_id for c in p.hole_cards
         ]
         # Convert this player's returned hole_cards to comparable tuples
         returned_cards = {(c["rank"], c["suit"]) for c in priv["hole_cards"]}
         other_cards = {(c.rank, c.suit) for c in other_hole_cards}
         # No card from another player should appear in this player's hole_cards payload
-        assert returned_cards.isdisjoint(other_cards), (
-            f"Player {player.player_id} received another player's hole card in their private state"
-        )
+        assert returned_cards.isdisjoint(
+            other_cards
+        ), f"Player {player.player_id} received another player's hole card in their private state"
 
 
 # Feature: openrouter-ai-player, Property 6: History Accumulation Invariant
@@ -295,13 +296,15 @@ def test_reasoning_stored_verbatim(reasoning):
 
 # Feature: ai-move-review, Property 6: Public state at showdown contains ai_move_review matching logged moves
 # Validates: Requirements 2.3, 3.1, 2.5
-move_log_strategy = st.fixed_dictionaries({
-    "player_name": st.text(min_size=1, max_size=20),
-    "phase": st.sampled_from(["pre_flop", "flop", "turn", "river"]),
-    "action": st.sampled_from(["fold", "check", "call", "raise", "all_in"]),
-    "amount": st.one_of(st.none(), st.integers(min_value=1, max_value=1000)),
-    "reasoning": st.text(),
-})
+move_log_strategy = st.fixed_dictionaries(
+    {
+        "player_name": st.text(min_size=1, max_size=20),
+        "phase": st.sampled_from(["pre_flop", "flop", "turn", "river"]),
+        "action": st.sampled_from(["fold", "check", "call", "raise", "all_in"]),
+        "amount": st.one_of(st.none(), st.integers(min_value=1, max_value=1000)),
+        "reasoning": st.text(),
+    }
+)
 
 
 @settings(max_examples=100)

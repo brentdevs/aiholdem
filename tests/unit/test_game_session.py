@@ -1,6 +1,8 @@
 """Unit tests for GameSession — lifecycle, actions, elimination."""
+
 import pytest
-from app.game.game_session import GameSession, STARTING_CHIPS, BIG_BLIND, SMALL_BLIND
+
+from app.game.game_session import BIG_BLIND, SMALL_BLIND, STARTING_CHIPS, GameSession
 from app.game.models import Action, ActionType, MoveLog, Phase, SessionStatus
 from app.game.players import AIPlayer, Player
 
@@ -19,6 +21,7 @@ def make_session_with_players(n=2):
 # ---------------------------------------------------------------------------
 # Lobby management
 # ---------------------------------------------------------------------------
+
 
 def test_add_player_in_lobby():
     session = GameSession("s1", "p1")
@@ -58,6 +61,7 @@ def test_cannot_add_player_after_start():
 # ---------------------------------------------------------------------------
 # Hand start — blinds and hole cards
 # ---------------------------------------------------------------------------
+
 
 def test_blinds_posted_on_start():
     session = make_session_with_players(2)
@@ -110,6 +114,7 @@ def test_initial_dealer_is_randomized_then_rotates(monkeypatch):
 # Actions
 # ---------------------------------------------------------------------------
 
+
 def test_out_of_turn_raises():
     session = make_session_with_players(2)
     session.start_game()
@@ -147,6 +152,7 @@ def test_fold_with_one_remaining_ends_hand():
 # Chip conservation
 # ---------------------------------------------------------------------------
 
+
 def test_chip_conservation_after_fold():
     """Total chips across all players are conserved after a complete hand."""
     session = make_session_with_players(2)
@@ -164,6 +170,7 @@ def test_chip_conservation_after_fold():
 # ---------------------------------------------------------------------------
 # Player elimination
 # ---------------------------------------------------------------------------
+
 
 def test_player_eliminated_at_zero_chips():
     session = make_session_with_players(2)
@@ -184,6 +191,7 @@ def test_player_eliminated_at_zero_chips():
 # ---------------------------------------------------------------------------
 # State payloads
 # ---------------------------------------------------------------------------
+
 
 def test_public_state_has_required_fields():
     session = make_session_with_players(2)
@@ -216,6 +224,7 @@ def test_player_state_has_valid_actions():
 # ---------------------------------------------------------------------------
 # AI Move Review — MoveLog behavior (Requirements 2.1–2.5, 3.1–3.3)
 # ---------------------------------------------------------------------------
+
 
 def make_ai_player(pid, chips=STARTING_CHIPS):
     return AIPlayer(player_id=pid, name=f"AI{pid}", chips=chips, provider="test")
@@ -258,8 +267,12 @@ def test_game_session_move_log_reset():
 
     # Inject some MoveLog entries to simulate a hand with AI moves
     session._hand_move_logs = [
-        MoveLog(player_name="AIai1", phase="pre_flop", action="check", amount=None, reasoning="test"),
-        MoveLog(player_name="AIai1", phase="flop", action="raise", amount=60, reasoning="strong hand"),
+        MoveLog(
+            player_name="AIai1", phase="pre_flop", action="check", amount=None, reasoning="test"
+        ),
+        MoveLog(
+            player_name="AIai1", phase="flop", action="raise", amount=60, reasoning="strong hand"
+        ),
     ]
     assert len(session._hand_move_logs) == 2
 
@@ -278,8 +291,16 @@ def test_public_state_ai_move_review_at_showdown():
 
     # Inject MoveLog entries
     logs = [
-        MoveLog(player_name="AIai1", phase="pre_flop", action="raise", amount=60, reasoning="pocket aces"),
-        MoveLog(player_name="AIai1", phase="flop", action="check", amount=None, reasoning="slow play"),
+        MoveLog(
+            player_name="AIai1",
+            phase="pre_flop",
+            action="raise",
+            amount=60,
+            reasoning="pocket aces",
+        ),
+        MoveLog(
+            player_name="AIai1", phase="flop", action="check", amount=None, reasoning="slow play"
+        ),
     ]
     session._hand_move_logs = logs
 
@@ -315,7 +336,9 @@ def test_public_state_no_ai_move_review_during_play():
 
     # Inject some logs to ensure they don't leak into active-play state
     session._hand_move_logs = [
-        MoveLog(player_name="AIai1", phase="pre_flop", action="call", amount=None, reasoning="test"),
+        MoveLog(
+            player_name="AIai1", phase="pre_flop", action="call", amount=None, reasoning="test"
+        ),
     ]
 
     state = session.get_public_state()

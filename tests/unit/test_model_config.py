@@ -1,4 +1,5 @@
 """Unit tests for model registry and arena lineup configuration."""
+
 from __future__ import annotations
 
 import pytest
@@ -47,9 +48,7 @@ def test_invalid_model_fails_fast():
 
 def test_duplicate_arena_entry_is_rejected():
     with pytest.raises(ValueError, match="Duplicate ARENA_PLAYERS entry"):
-        load_arena_player_configs(
-            raw_value="ollama:deepseek-v4-pro,ollama:deepseek-v4-pro"
-        )
+        load_arena_player_configs(raw_value="ollama:deepseek-v4-pro,ollama:deepseek-v4-pro")
 
 
 def test_supported_model_configs_are_deduped_by_backend_and_model():

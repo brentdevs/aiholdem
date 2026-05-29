@@ -1,5 +1,7 @@
 """Property-based tests for Evaluator."""
+
 from hypothesis import given, settings
+
 from app.game.evaluator import Evaluator
 from app.game.models import HandRank
 from tests.property.conftest import seven_card_hand

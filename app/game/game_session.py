@@ -5,12 +5,12 @@ import random
 import uuid
 from datetime import datetime
 
+from app.game.dealer import Dealer
+from app.game.evaluator import Evaluator
 from app.game.models import Action, ActionType, Hand, MoveLog, Phase, SessionStatus
 from app.game.players import Player
-from app.game.evaluator import Evaluator
-from app.game.dealer import Dealer
 from app.game.pot_manager import PotManager
-from app.profiling.hand_recorder import HandRecord, ErrorRecord, compute_stat_flags
+from app.profiling.hand_recorder import ErrorRecord, HandRecord, compute_stat_flags
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +22,13 @@ STARTING_CHIPS = 1000
 # Level advances every HANDS_PER_BLIND_LEVEL hands.
 HANDS_PER_BLIND_LEVEL = 10
 BLIND_SCHEDULE: list[tuple[int, int]] = [
-    (10,  20),   # level 0  — hands 1-10
-    (20,  40),   # level 1  — hands 11-20
-    (40,  80),   # level 2  — hands 21-30
-    (75,  150),  # level 3  — hands 31-40
+    (10, 20),  # level 0  — hands 1-10
+    (20, 40),  # level 1  — hands 11-20
+    (40, 80),  # level 2  — hands 21-30
+    (75, 150),  # level 3  — hands 31-40
     (150, 300),  # level 4  — hands 41-50
     (300, 600),  # level 5  — hands 51-60
-    (500, 1000), # level 6  — hands 61+  (stays here)
+    (500, 1000),  # level 6  — hands 61+  (stays here)
 ]
 
 
@@ -36,6 +36,7 @@ def blinds_for_hand(hand_number: int) -> tuple[int, int]:
     """Return (small_blind, big_blind) for the given hand number (1-indexed)."""
     level = min((hand_number - 1) // HANDS_PER_BLIND_LEVEL, len(BLIND_SCHEDULE) - 1)
     return BLIND_SCHEDULE[level]
+
 
 # Maps for compact hand history encoding
 _PHASE_ABBR: dict[Phase, str] = {
@@ -95,7 +96,12 @@ class GameSession:
             raise ValueError("Cannot add player: session is full (max 9 players)")
         self.players.append(player)
         self.last_activity = datetime.now()
-        logger.info("Player added session=%s player=%s name=%r", self.session_id, player.player_id, player.name)
+        logger.info(
+            "Player added session=%s player=%s name=%r",
+            self.session_id,
+            player.player_id,
+            player.name,
+        )
 
     def remove_player(self, player_id: str) -> None:
         if self.status != SessionStatus.LOBBY:
@@ -136,10 +142,9 @@ class GameSession:
 
         # Validate bet amounts against the player's actual chip stack
         if action.type == ActionType.RAISE:
-            round_contrib = (
-                self._pot_manager.contributions.get(player_id, 0)
-                - self._round_start_contributions.get(player_id, 0)
-            )
+            round_contrib = self._pot_manager.contributions.get(
+                player_id, 0
+            ) - self._round_start_contributions.get(player_id, 0)
             chips_needed = action.amount - round_contrib
             if chips_needed > current_player.chips:
                 raise ValueError(
@@ -154,23 +159,26 @@ class GameSession:
             if action.amount != current_player.chips:
                 logger.warning(
                     "ALL_IN amount corrected session=%s player=%s submitted=%s chips=%s",
-                    self.session_id, player_id, action.amount, current_player.chips,
+                    self.session_id,
+                    player_id,
+                    action.amount,
+                    current_player.chips,
                 )
                 action.amount = current_player.chips
         elif action.type == ActionType.CALL:
-            round_contrib = (
-                self._pot_manager.contributions.get(player_id, 0)
-                - self._round_start_contributions.get(player_id, 0)
-            )
+            round_contrib = self._pot_manager.contributions.get(
+                player_id, 0
+            ) - self._round_start_contributions.get(player_id, 0)
             max_call = min(hand.current_bet - round_contrib, current_player.chips)
             if action.amount > max_call:
-                raise ValueError(
-                    f"Call amount {action.amount} exceeds maximum {max_call}"
-                )
+                raise ValueError(f"Call amount {action.amount} exceeds maximum {max_call}")
 
         logger.debug(
             "Action applied session=%s player=%s action=%s amount=%s",
-            self.session_id, player_id, action.type.value, action.amount or "",
+            self.session_id,
+            player_id,
+            action.type.value,
+            action.amount or "",
         )
         self._apply_action_to_player(current_player, action, hand)
         self.last_activity = datetime.now()
@@ -183,14 +191,18 @@ class GameSession:
 
         # Append MoveLog for AI players
         if hasattr(current_player, "provider"):
-            amount_for_log = action.amount if action.type in (ActionType.RAISE, ActionType.ALL_IN) else None
-            self._hand_move_logs.append(MoveLog(
-                player_name=current_player.name,
-                phase=hand.phase.value,
-                action=action.type.value,
-                amount=amount_for_log,
-                reasoning=reasoning,
-            ))
+            amount_for_log = (
+                action.amount if action.type in (ActionType.RAISE, ActionType.ALL_IN) else None
+            )
+            self._hand_move_logs.append(
+                MoveLog(
+                    player_name=current_player.name,
+                    phase=hand.phase.value,
+                    action=action.type.value,
+                    amount=amount_for_log,
+                    reasoning=reasoning,
+                )
+            )
 
         self._advance_phase_if_needed()
 
@@ -200,10 +212,9 @@ class GameSession:
 
         hand = self.current_hand
         # Round-relative contribution: what this player has put in this round
-        round_contrib = (
-            self._pot_manager.contributions.get(player.player_id, 0)
-            - self._round_start_contributions.get(player.player_id, 0)
-        )
+        round_contrib = self._pot_manager.contributions.get(
+            player.player_id, 0
+        ) - self._round_start_contributions.get(player.player_id, 0)
         call_amount = max(0, hand.current_bet - round_contrib)
 
         actions: list[Action] = []
@@ -231,7 +242,9 @@ class GameSession:
 
     def get_public_state(self) -> dict:
         hand = self.current_hand
-        pot = sum(self._pot_manager.contributions.values()) if self._pot_manager.contributions else 0
+        pot = (
+            sum(self._pot_manager.contributions.values()) if self._pot_manager.contributions else 0
+        )
 
         player_list = []
         active = self._get_active_players()
@@ -255,8 +268,7 @@ class GameSession:
             # Reveal all hole cards during showdown
             if self.showdown_pending and p.player_id in self._showdown_hole_cards:
                 player_entry["hole_cards"] = [
-                    {"rank": c.rank, "suit": c.suit}
-                    for c in self._showdown_hole_cards[p.player_id]
+                    {"rank": c.rank, "suit": c.suit} for c in self._showdown_hole_cards[p.player_id]
                 ]
             player_list.append(player_entry)
 
@@ -272,14 +284,18 @@ class GameSession:
 
         if hand is not None:
             state["phase"] = hand.phase.value
-            state["community_cards"] = [{"rank": c.rank, "suit": c.suit} for c in hand.community_cards]
+            state["community_cards"] = [
+                {"rank": c.rank, "suit": c.suit} for c in hand.community_cards
+            ]
             state["pot"] = pot
             state["min_raise"] = hand.min_raise
             state["current_bet"] = hand.current_bet
             state["hand_history"] = hand.history
         elif self.showdown_pending:
             state["phase"] = "showdown"
-            state["community_cards"] = [{"rank": c.rank, "suit": c.suit} for c in self._showdown_community_cards]
+            state["community_cards"] = [
+                {"rank": c.rank, "suit": c.suit} for c in self._showdown_community_cards
+            ]
             state["pot"] = pot
             state["min_raise"] = blinds_for_hand(max(self.hand_number, 1))[1]
             state["current_bet"] = 0
@@ -310,8 +326,7 @@ class GameSession:
         if player is not None:
             state["hole_cards"] = [{"rank": c.rank, "suit": c.suit} for c in player.hole_cards]
             state["valid_actions"] = [
-                {"type": a.type.value, "amount": a.amount}
-                for a in self.get_valid_actions(player)
+                {"type": a.type.value, "amount": a.amount} for a in self.get_valid_actions(player)
             ]
             state["position"] = self._get_position_label(player_id)
         return state
@@ -384,7 +399,10 @@ class GameSession:
         small_blind, big_blind = blinds_for_hand(self.hand_number)
         logger.debug(
             "Hand %d blinds session=%s sb=%d bb=%d",
-            self.hand_number, self.session_id, small_blind, big_blind,
+            self.hand_number,
+            self.session_id,
+            small_blind,
+            big_blind,
         )
 
         self._pot_manager.post_blind(sb_player, small_blind)
@@ -430,7 +448,8 @@ class GameSession:
             (
                 self._pot_manager.contributions.get(p.player_id, 0)
                 - self._round_start_contributions.get(p.player_id, 0)
-            ) >= hand.current_bet
+            )
+            >= hand.current_bet
             or p.chips == 0
             for p in active
         )
@@ -509,9 +528,7 @@ class GameSession:
 
         # Snapshot hole cards and community cards for showdown reveal
         self._showdown_hole_cards = {
-            p.player_id: list(p.hole_cards)
-            for p in all_players
-            if p.hole_cards
+            p.player_id: list(p.hole_cards) for p in all_players if p.hole_cards
         }
         self._showdown_community_cards = list(hand.community_cards)
         self._showdown_hand_history: list = list(hand.history)
@@ -526,15 +543,21 @@ class GameSession:
                 hand_rank_label = hand_result.rank.name.replace("_", " ").title()
             else:
                 hand_rank_label = None  # fold win — no showdown
-            self._showdown_results.append({
-                "player_id": p.player_id,
-                "name": p.name,
-                "hand_rank": hand_rank_label,
-                "chips_won": chips_won,
-            })
+            self._showdown_results.append(
+                {
+                    "player_id": p.player_id,
+                    "name": p.name,
+                    "hand_rank": hand_rank_label,
+                    "chips_won": chips_won,
+                }
+            )
             logger.info(
                 "Hand won session=%s player=%s name=%r hand=%s chips_won=%d",
-                self.session_id, p.player_id, p.name, hand_rank_label, chips_won,
+                self.session_id,
+                p.player_id,
+                p.name,
+                hand_rank_label,
+                chips_won,
             )
 
         # Record hand to profiling service
@@ -544,7 +567,12 @@ class GameSession:
         for p in self.players:
             if p.chips == 0:
                 p.is_eliminated = True
-                logger.info("Player eliminated session=%s player=%s name=%r", self.session_id, p.player_id, p.name)
+                logger.info(
+                    "Player eliminated session=%s player=%s name=%r",
+                    self.session_id,
+                    p.player_id,
+                    p.name,
+                )
 
         non_eliminated = self._get_non_eliminated_players()
         if len(non_eliminated) <= 1:
@@ -581,9 +609,7 @@ class GameSession:
 
         try:
             winner_ids = {p.player_id for p in winners}
-            active_at_showdown = {
-                p.player_id for p in all_players if p.is_active
-            }
+            active_at_showdown = {p.player_id for p in all_players if p.is_active}
 
             # Determine dealer, SB, BB from non-eliminated players and dealer_button_index
             non_eliminated = all_players
@@ -653,7 +679,9 @@ class GameSession:
         except Exception as exc:
             logger.error(
                 "Failed to record hand to profiling session=%s hand=%d: %s",
-                self.session_id, self.hand_number, exc,
+                self.session_id,
+                self.hand_number,
+                exc,
             )
 
     # ------------------------------------------------------------------
@@ -766,24 +794,21 @@ class GameSession:
             pass
 
         elif action.type == ActionType.CALL:
-            round_contrib = (
-                self._pot_manager.contributions.get(player.player_id, 0)
-                - self._round_start_contributions.get(player.player_id, 0)
-            )
+            round_contrib = self._pot_manager.contributions.get(
+                player.player_id, 0
+            ) - self._round_start_contributions.get(player.player_id, 0)
             call_amount = max(0, hand.current_bet - round_contrib)
             call_amount = min(call_amount, player.chips)
             if call_amount > 0:
                 self._pot_manager.place_bet(player, call_amount)
-            player.current_bet = (
-                self._pot_manager.contributions.get(player.player_id, 0)
-                - self._round_start_contributions.get(player.player_id, 0)
-            )
+            player.current_bet = self._pot_manager.contributions.get(
+                player.player_id, 0
+            ) - self._round_start_contributions.get(player.player_id, 0)
 
         elif action.type == ActionType.RAISE:
-            round_contrib = (
-                self._pot_manager.contributions.get(player.player_id, 0)
-                - self._round_start_contributions.get(player.player_id, 0)
-            )
+            round_contrib = self._pot_manager.contributions.get(
+                player.player_id, 0
+            ) - self._round_start_contributions.get(player.player_id, 0)
             # action.amount is the total new bet level for this round
             if action.amount > 0:
                 total_round_bet = action.amount
@@ -796,10 +821,9 @@ class GameSession:
             if chips_to_put_in > 0:
                 self._pot_manager.place_bet(player, chips_to_put_in)
 
-            player.current_bet = (
-                self._pot_manager.contributions.get(player.player_id, 0)
-                - self._round_start_contributions.get(player.player_id, 0)
-            )
+            player.current_bet = self._pot_manager.contributions.get(
+                player.player_id, 0
+            ) - self._round_start_contributions.get(player.player_id, 0)
 
             # Update hand state
             new_round_contrib = player.current_bet
@@ -813,10 +837,9 @@ class GameSession:
             if all_in_amount > 0:
                 self._pot_manager.place_bet(player, all_in_amount)
 
-            new_round_contrib = (
-                self._pot_manager.contributions.get(player.player_id, 0)
-                - self._round_start_contributions.get(player.player_id, 0)
-            )
+            new_round_contrib = self._pot_manager.contributions.get(
+                player.player_id, 0
+            ) - self._round_start_contributions.get(player.player_id, 0)
             player.current_bet = new_round_contrib
 
             if new_round_contrib > hand.current_bet:

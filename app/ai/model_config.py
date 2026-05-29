@@ -1,8 +1,9 @@
 """Model registry and arena lineup configuration."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
 from app.ai.ollama_player import SUPPORTED_OLLAMA_MODELS, _derive_ollama_display_name
 from app.ai.openrouter_player import SUPPORTED_MODELS, _derive_display_name
@@ -83,8 +84,7 @@ def _parse_arena_players(raw_value: str) -> list[tuple[str, str]]:
             continue
         if ":" not in entry:
             raise ValueError(
-                "Invalid ARENA_PLAYERS entry "
-                f"{entry!r}; expected '<backend>:<model>'"
+                "Invalid ARENA_PLAYERS entry " f"{entry!r}; expected '<backend>:<model>'"
             )
         backend, model = entry.split(":", 1)
         entries.append((backend.strip().lower(), model.strip()))
@@ -105,9 +105,7 @@ def _validate_arena_entries(entries: list[tuple[str, str]]) -> list[ModelConfig]
                 f"Unsupported ARENA_PLAYERS backend {backend!r}; valid backends: {valid}"
             )
         if model not in supported[backend]:
-            raise ValueError(
-                f"Unsupported ARENA_PLAYERS model {model!r} for backend {backend!r}"
-            )
+            raise ValueError(f"Unsupported ARENA_PLAYERS model {model!r} for backend {backend!r}")
         key = (backend, model)
         if key in seen:
             raise ValueError(f"Duplicate ARENA_PLAYERS entry {backend}:{model}")

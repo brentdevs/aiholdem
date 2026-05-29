@@ -1,10 +1,12 @@
 """Property-based tests for OpenRouter AI player components."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from hypothesis import assume, given, settings, strategies as st
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
 from app.ai.openrouter_player import (
     SUPPORTED_MODELS,
@@ -22,17 +24,27 @@ from app.game.models import Action, ActionType
 # Validates: Requirements 1.1
 # ---------------------------------------------------------------------------
 
-_game_state_strategy = st.fixed_dictionaries({
-    "community_cards": st.just([]),
-    "hole_cards": st.just([]),
-    "pot": st.integers(min_value=0, max_value=10000),
-    "players": st.just([]),
-    "position": st.text(min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"))),
-    "min_raise": st.integers(min_value=0, max_value=500),
-})
+_game_state_strategy = st.fixed_dictionaries(
+    {
+        "community_cards": st.just([]),
+        "hole_cards": st.just([]),
+        "pot": st.integers(min_value=0, max_value=10000),
+        "players": st.just([]),
+        "position": st.text(
+            min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"))
+        ),
+        "min_raise": st.integers(min_value=0, max_value=500),
+    }
+)
 
 _valid_actions_strategy = st.lists(
-    st.sampled_from([Action(type=ActionType.FOLD), Action(type=ActionType.CHECK), Action(type=ActionType.CALL, amount=20)]),
+    st.sampled_from(
+        [
+            Action(type=ActionType.FOLD),
+            Action(type=ActionType.CHECK),
+            Action(type=ActionType.CALL, amount=20),
+        ]
+    ),
     min_size=1,
     max_size=3,
 )
@@ -46,13 +58,16 @@ def test_prompt_always_contains_reasoning_instruction(game_state, valid_actions)
     prompt = _build_prompt(game_state, valid_actions, [], "p1")
     assert '"reasoning"' in prompt
 
+
 # ---------------------------------------------------------------------------
 # Strategies
 # ---------------------------------------------------------------------------
 
 phase_abbrs = st.sampled_from(["pre-flop", "flop", "turn", "river"])
 action_codes = st.sampled_from(["F", "X", "C", "R", "A"])
-player_names = st.text(min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Lu", "Ll")))
+player_names = st.text(
+    min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Lu", "Ll"))
+)
 amounts = st.one_of(st.none(), st.integers(min_value=1, max_value=1000))
 
 history_entry = st.tuples(phase_abbrs, player_names, action_codes, amounts)
@@ -63,6 +78,7 @@ history_list = st.lists(history_entry, min_size=1, max_size=20)
 # Property 7: History Serialization Format
 # Validates: Requirements 9.3, 9.4, 9.7, 9.8
 # ---------------------------------------------------------------------------
+
 
 # Feature: openrouter-ai-player, Property 7: History Serialization Format
 @settings(max_examples=200)
@@ -103,6 +119,7 @@ def test_serialize_history_empty(history):
 # Property 5: Prompt Completeness
 # Validates: Requirements 2.4, 9.9
 # ---------------------------------------------------------------------------
+
 
 # Feature: openrouter-ai-player, Property 5: Prompt Completeness
 @settings(max_examples=100)
@@ -248,6 +265,7 @@ def test_exception_safety(exc_index):
 # Validates: Requirements 1.2, 1.3
 # ---------------------------------------------------------------------------
 
+
 # Feature: openrouter-ai-player, Property 4: Model String Independence
 @settings(max_examples=100)
 @given(
@@ -268,11 +286,14 @@ def test_model_string_independence(m1, m2):
 # Validates: Requirements 1.4, 5.4
 # ---------------------------------------------------------------------------
 
+
 # Feature: openrouter-ai-player, Property 8: Display Name Derivation
 @settings(max_examples=200)
 @given(
     provider=st.text(min_size=1, max_size=10, alphabet=st.characters(whitelist_categories=("Ll",))),
-    name=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Nd"))),
+    name=st.text(
+        min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Ll", "Nd"))
+    ),
     free=st.booleans(),
 )
 def test_display_name_derivation(provider, name, free):
@@ -293,6 +314,7 @@ def test_display_name_derivation(provider, name, free):
 # Feature: ai-move-review, Property 2: Reasoning extraction returns text before action keyword
 # Validates: Requirements 1.2, 1.5
 # ---------------------------------------------------------------------------
+
 
 # Feature: ai-move-review, Property 2: Reasoning extraction returns text before action keyword
 @settings(max_examples=200)
@@ -323,6 +345,7 @@ def test_extract_reasoning_returns_text_before_keyword(text, keyword):
 # Validates: Requirements 1.4, 1.3
 # ---------------------------------------------------------------------------
 
+
 # Feature: ai-move-review, Property 3: decide_action returns action and non-empty reasoning
 @settings(max_examples=100)
 @given(
@@ -330,7 +353,9 @@ def test_extract_reasoning_returns_text_before_keyword(text, keyword):
     valid_actions=_valid_actions_strategy,
     response_text=st.sampled_from(["I have a strong hand. check", "fold", "", "gibberish xyz"]),
 )
-def test_decide_action_returns_action_and_non_empty_reasoning(game_state, valid_actions, response_text):
+def test_decide_action_returns_action_and_non_empty_reasoning(
+    game_state, valid_actions, response_text
+):
     """decide_action always returns a (Action, str) tuple where the str is non-empty."""
     player = OpenRouterPlayer(player_id="p1", chips=1000, model=SUPPORTED_MODELS[0])
 

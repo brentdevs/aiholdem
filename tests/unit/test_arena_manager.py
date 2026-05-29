@@ -2,15 +2,17 @@
 
 Requirements: 3.1, 3.2, 3.4, 4.1, 4.3, 4.4, 8.1, 8.2, 8.3, 8.4
 """
+
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
-from app.arena.arena_manager import ArenaManager, ARENA_PLAYER_MODELS
-
+from app.arena.arena_manager import ARENA_PLAYER_MODELS, ArenaManager
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_arena_manager() -> ArenaManager:
     """Return a fresh ArenaManager with start_game mocked to avoid real game logic."""
@@ -21,6 +23,7 @@ def make_arena_manager() -> ArenaManager:
 # ---------------------------------------------------------------------------
 # Session creation (Requirements 3.1, 3.2, 3.3)
 # ---------------------------------------------------------------------------
+
 
 def test_get_or_create_session_creates_once():
     """Calling get_or_create_session twice returns the same session object."""
@@ -46,6 +49,7 @@ def test_session_id_is_arena():
 # Arena player configuration (Requirements 4.1, 4.3, 4.4)
 # ---------------------------------------------------------------------------
 
+
 def test_arena_players_match_models():
     """Session players match ARENA_PLAYER_MODELS."""
     manager = make_arena_manager()
@@ -62,7 +66,9 @@ def test_all_players_are_ai():
     with patch("app.arena.arena_manager.GameSession.start_game"):
         session = manager.get_or_create_session()
     for player in session.players:
-        assert hasattr(player, "provider"), f"Player {player.player_id} missing 'provider' attribute"
+        assert hasattr(
+            player, "provider"
+        ), f"Player {player.player_id} missing 'provider' attribute"
 
 
 def test_arena_state_reveals_hole_cards_during_live_hand():
@@ -80,6 +86,7 @@ def test_arena_state_reveals_hole_cards_during_live_hand():
 # ---------------------------------------------------------------------------
 # Viewer count tracking (Requirements 8.4)
 # ---------------------------------------------------------------------------
+
 
 def test_viewer_count_increments_on_join():
     """Joining 3 different sockets results in viewer_count == 3."""
@@ -111,6 +118,7 @@ def test_viewer_count_no_duplicate():
 # ---------------------------------------------------------------------------
 # Pause / resume behavior (Requirements 8.1, 8.2, 8.3)
 # ---------------------------------------------------------------------------
+
 
 def test_paused_on_last_viewer_leave():
     """When the last viewer leaves, paused becomes True."""
@@ -154,9 +162,11 @@ def test_state_preserved_during_pause():
 # Inter-hand pause and reset logic (Requirements 6.1, 6.5, 6.6, 7.1, 7.2, 7.5)
 # ---------------------------------------------------------------------------
 
+
 def test_inter_hand_pause_calls_next_hand_when_viewers():
     """_inter_hand_pause calls next_hand() and dispatches AI turn when viewers present."""
     import app as app_module
+
     manager = make_arena_manager()
     with patch("app.arena.arena_manager.GameSession.start_game"):
         session = manager.get_or_create_session()
@@ -166,11 +176,13 @@ def test_inter_hand_pause_calls_next_hand_when_viewers():
     session.showdown_pending = True
 
     mock_socketio = MagicMock()
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(session, "next_hand") as mock_next_hand, \
-         patch.object(manager, "broadcast_state") as mock_broadcast, \
-         patch.object(manager, "_dispatch_ai_turn"), \
-         patch.object(app_module, "socketio", mock_socketio):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        session, "next_hand"
+    ) as mock_next_hand, patch.object(manager, "broadcast_state") as mock_broadcast, patch.object(
+        manager, "_dispatch_ai_turn"
+    ), patch.object(
+        app_module, "socketio", mock_socketio
+    ):
         manager._inter_hand_pause()
 
     mock_next_hand.assert_called_once()
@@ -180,6 +192,7 @@ def test_inter_hand_pause_calls_next_hand_when_viewers():
 def test_inter_hand_pause_pauses_when_no_viewers():
     """_inter_hand_pause sets paused=True and does NOT call next_hand when viewer_count==0."""
     import app as app_module
+
     manager = make_arena_manager()
     with patch("app.arena.arena_manager.GameSession.start_game"):
         session = manager.get_or_create_session()
@@ -189,9 +202,9 @@ def test_inter_hand_pause_pauses_when_no_viewers():
     session.showdown_pending = True
 
     mock_socketio = MagicMock()
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(session, "next_hand") as mock_next_hand, \
-         patch.object(app_module, "socketio", mock_socketio):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        session, "next_hand"
+    ) as mock_next_hand, patch.object(app_module, "socketio", mock_socketio):
         manager._inter_hand_pause()
 
     mock_next_hand.assert_not_called()
@@ -201,6 +214,7 @@ def test_inter_hand_pause_pauses_when_no_viewers():
 def test_showdown_dispatch_schedules_one_inter_hand_pause():
     """Repeated showdown dispatches do not create duplicate pause tasks."""
     import app as app_module
+
     manager = make_arena_manager()
     session = manager.get_or_create_session()
     session.showdown_pending = True
@@ -275,10 +289,11 @@ def test_reset_creates_new_session():
 
     manager.on_viewer_join("sid1")
 
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(manager, "broadcast_state"), \
-         patch.object(manager, "_start_ai_loop") as mock_start_loop, \
-         patch("app.arena.arena_manager.GameSession.start_game"):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        manager, "broadcast_state"
+    ), patch.object(manager, "_start_ai_loop") as mock_start_loop, patch(
+        "app.arena.arena_manager.GameSession.start_game"
+    ):
         manager._reset_after_complete()
 
     assert manager.session is not old_session
@@ -295,10 +310,11 @@ def test_reset_does_not_start_loop_when_no_viewers():
     # No viewers
     assert manager.viewer_count == 0
 
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(manager, "broadcast_state"), \
-         patch.object(manager, "_start_ai_loop") as mock_start_loop, \
-         patch("app.arena.arena_manager.GameSession.start_game"):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        manager, "broadcast_state"
+    ), patch.object(manager, "_start_ai_loop") as mock_start_loop, patch(
+        "app.arena.arena_manager.GameSession.start_game"
+    ):
         manager._reset_after_complete()
 
     mock_start_loop.assert_not_called()
@@ -308,6 +324,7 @@ def test_reset_does_not_start_loop_when_no_viewers():
 # ---------------------------------------------------------------------------
 # Elimination tracking (Requirements 3.1)
 # ---------------------------------------------------------------------------
+
 
 def test_track_eliminations_records_eliminated_players():
     """_track_eliminations appends newly eliminated player IDs."""
@@ -359,6 +376,7 @@ def test_track_eliminations_preserves_order():
 # Game result recording (Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 4.3, 5.2)
 # ---------------------------------------------------------------------------
 
+
 def test_reset_after_complete_records_game_results():
     """_reset_after_complete calls leaderboard_service.record_game_results with correct data."""
     manager = make_arena_manager()
@@ -382,10 +400,11 @@ def test_reset_after_complete_records_game_results():
 
     manager.on_viewer_join("sid1")
 
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(manager, "broadcast_state"), \
-         patch.object(manager, "_start_ai_loop"), \
-         patch("app.arena.arena_manager.GameSession.start_game"):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        manager, "broadcast_state"
+    ), patch.object(manager, "_start_ai_loop"), patch(
+        "app.arena.arena_manager.GameSession.start_game"
+    ):
         manager._reset_after_complete()
 
     mock_service.record_game_results.assert_called_once()
@@ -412,9 +431,9 @@ def test_reset_after_complete_skips_recording_when_no_service():
 
     assert manager.leaderboard_service is None
 
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(manager, "broadcast_state"), \
-         patch("app.arena.arena_manager.GameSession.start_game"):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        manager, "broadcast_state"
+    ), patch("app.arena.arena_manager.GameSession.start_game"):
         # Should not raise
         manager._reset_after_complete()
 
@@ -429,9 +448,9 @@ def test_reset_after_complete_skips_recording_when_service_unavailable():
     mock_service.available = False
     manager.leaderboard_service = mock_service
 
-    with patch("app.arena.arena_manager.eventlet.sleep"), \
-         patch.object(manager, "broadcast_state"), \
-         patch("app.arena.arena_manager.GameSession.start_game"):
+    with patch("app.arena.arena_manager.eventlet.sleep"), patch.object(
+        manager, "broadcast_state"
+    ), patch("app.arena.arena_manager.GameSession.start_game"):
         manager._reset_after_complete()
 
     mock_service.record_game_results.assert_not_called()

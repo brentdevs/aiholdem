@@ -1,4 +1,5 @@
 """HTTP routes for the Texas Hold 'Em poker platform."""
+
 import logging
 
 from flask import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
@@ -68,19 +69,19 @@ def get_models():
     supported_configs = get_supported_model_configs()
     supported = [config.as_dict() for config in supported_configs]
     arena_players = [config.as_dict() for config in ARENA_PLAYER_CONFIGS]
-    return jsonify({
-        "models": supported,
-        "arena_players": arena_players,
-        "backends": {
-            "openrouter": [
-                config.as_dict()
-                for config in supported_configs
-                if config.backend == "openrouter"
-            ],
-            "ollama": [
-                config.as_dict()
-                for config in supported_configs
-                if config.backend == "ollama"
-            ],
-        },
-    })
+    return jsonify(
+        {
+            "models": supported,
+            "arena_players": arena_players,
+            "backends": {
+                "openrouter": [
+                    config.as_dict()
+                    for config in supported_configs
+                    if config.backend == "openrouter"
+                ],
+                "ollama": [
+                    config.as_dict() for config in supported_configs if config.backend == "ollama"
+                ],
+            },
+        }
+    )

@@ -1,7 +1,7 @@
 """Unit tests for app.profiling.profile_formatter."""
 
-from app.profiling.stat_aggregator import PlayerStats
 from app.profiling.profile_formatter import format_profile, format_profiles_block
+from app.profiling.stat_aggregator import PlayerStats
 
 
 def _make_stats(**overrides) -> PlayerStats:
@@ -99,6 +99,6 @@ class TestFormatProfilesBlock:
             profiles.append(format_profile(f"P{i+1}", stats, style))
         block = format_profiles_block(profiles)
         estimated_tokens = len(block) / 4
-        assert 100 <= estimated_tokens <= 900, (
-            f"Token estimate {estimated_tokens:.0f} outside acceptable range"
-        )
+        assert (
+            100 <= estimated_tokens <= 900
+        ), f"Token estimate {estimated_tokens:.0f} outside acceptable range"

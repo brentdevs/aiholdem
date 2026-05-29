@@ -9,9 +9,7 @@ class Dealer:
     def shuffle_deck(self) -> list[Card]:
         """Build a full 52-card deck and return it shuffled."""
         deck = [
-            Card(rank=rank, suit=suit)
-            for suit in ("S", "H", "D", "C")
-            for rank in range(2, 15)
+            Card(rank=rank, suit=suit) for suit in ("S", "H", "D", "C") for rank in range(2, 15)
         ]
         random.shuffle(deck)
         return deck
