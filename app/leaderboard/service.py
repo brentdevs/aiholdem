@@ -128,12 +128,13 @@ class LeaderboardService:
                             display_name,
                             games_played,
                             wins,
+                            (wins * 100.0) / NULLIF(games_played, 0) AS win_pct,
                             placing_sum::float / NULLIF(games_played, 0) AS avg_placing,
                             latency_sum_ms::float / NULLIF(api_calls, 0) AS avg_latency_ms,
                             (api_failures * 100.0) / NULLIF(api_calls, 0) AS failure_rate_pct,
                             retired
                         FROM leaderboard
-                        ORDER BY retired ASC, wins DESC;
+                        ORDER BY win_pct DESC NULLS LAST;
                     """)
                     columns = [desc[0] for desc in cur.description]
                     return [dict(zip(columns, row)) for row in cur.fetchall()]

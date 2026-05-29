@@ -94,7 +94,13 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
       white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
     }
+
+    thead th:hover { color: #fff; }
+
+    thead th .sort-arrow { font-size: 0.65rem; margin-left: 0.3em; }
 
     tbody td {
       padding: 0.5rem 0.6rem;
@@ -180,6 +186,9 @@
     <div class="section">
       <div class="meta">
         <span id="last-updated"></span>
+        <label style="font-size:0.8rem;color:#ccc;cursor:pointer;">
+          <input type="checkbox" id="hide-retired" style="margin-right:0.3rem;" />Hide retired models
+        </label>
         <span id="auto-refresh-note">Auto-refreshes every 30s</span>
       </div>
 
@@ -189,16 +198,17 @@
           <tr>
             <th>Rank</th>
             <th>Model</th>
-            <th class="num">Games</th>
-            <th class="num">Wins</th>
-            <th class="num">Avg Placing</th>
-            <th class="num">Avg Latency (ms)</th>
-            <th class="num">Failure Rate (%)</th>
+            <th class="num" data-key="games_played">Games</th>
+            <th class="num" data-key="wins">Wins</th>
+            <th class="num" data-key="win_pct">Win %</th>
+            <th class="num" data-key="avg_placing">Avg Placing</th>
+            <th class="num" data-key="avg_latency_ms">Avg Latency (ms)</th>
+            <th class="num" data-key="failure_rate_pct">Failure Rate (%)</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody id="leaderboard-body">
-          <tr id="no-data"><td colspan="8">Loading…</td></tr>
+          <tr id="no-data"><td colspan="9">Loading…</td></tr>
         </tbody>
       </table>
       </div>
@@ -209,39 +219,68 @@
     const tbody = document.getElementById('leaderboard-body');
     const errorMsg = document.getElementById('error-msg');
     const lastUpdated = document.getElementById('last-updated');
+    const hideRetiredCheckbox = document.getElementById('hide-retired');
     let refreshTimer = null;
+    let leaderboardData = [];
+    let sortKey = 'win_pct';
+    let sortAsc = false;
 
     function fmt(val, decimals) {
       if (val === null || val === undefined) return '—';
       return Number(val).toFixed(decimals);
     }
 
-    function renderTable(data) {
+    function sortVal(entry, key) {
+      var v = entry[key];
+      return v === null || v === undefined ? -Infinity : v;
+    }
+
+    function renderTable() {
+      var data = leaderboardData;
+      if (hideRetiredCheckbox.checked) {
+        data = data.filter(function(e) { return !e.retired; });
+      }
+      data.sort(function(a, b) {
+        var av = sortVal(a, sortKey), bv = sortVal(b, sortKey);
+        return sortAsc ? av - bv : bv - av;
+      });
+
+      // Update header arrows
+      document.querySelectorAll('thead th[data-key]').forEach(function(th) {
+        var arrow = th.querySelector('.sort-arrow');
+        if (arrow) arrow.remove();
+        if (th.dataset.key === sortKey) {
+          var span = document.createElement('span');
+          span.className = 'sort-arrow';
+          span.textContent = sortAsc ? '▲' : '▼';
+          th.appendChild(span);
+        }
+      });
+
       if (!data.length) {
-        tbody.innerHTML = '<tr id="no-data"><td colspan="8">No leaderboard data yet.</td></tr>';
+        tbody.innerHTML = '<tr id="no-data"><td colspan="9">No leaderboard data yet.</td></tr>';
         return;
       }
 
       tbody.innerHTML = '';
       data.forEach(function(entry, i) {
-        const tr = document.createElement('tr');
+        var tr = document.createElement('tr');
         if (entry.retired) tr.className = 'retired';
 
-        const rank = i + 1;
-        const avgPlacing = fmt(entry.avg_placing, 1);
-        const avgLatency = fmt(entry.avg_latency_ms, 0);
-        const failRate = entry.failure_rate_pct !== null && entry.failure_rate_pct !== undefined
-          ? fmt(entry.failure_rate_pct, 1) + '%'
-          : '—';
-        const statusBadge = entry.retired
+        var winPct = fmt(entry.win_pct, 1);
+        var avgPlacing = fmt(entry.avg_placing, 1);
+        var avgLatency = fmt(entry.avg_latency_ms, 0);
+        var failRate = entry.failure_rate_pct != null ? fmt(entry.failure_rate_pct, 1) + '%' : '—';
+        var statusBadge = entry.retired
           ? '<span class="badge-retired">Retired</span>'
           : '<span class="badge-active">Active</span>';
 
         tr.innerHTML =
-          '<td class="rank-cell">' + rank + '</td>' +
+          '<td class="rank-cell">' + (i + 1) + '</td>' +
           '<td class="model-name">' + escapeHtml(entry.display_name) + '</td>' +
           '<td class="num">' + entry.games_played + '</td>' +
           '<td class="num">' + entry.wins + '</td>' +
+          '<td class="num">' + (winPct !== '—' ? winPct + '%' : '—') + '</td>' +
           '<td class="num">' + avgPlacing + '</td>' +
           '<td class="num">' + avgLatency + '</td>' +
           '<td class="num">' + failRate + '</td>' +
@@ -274,7 +313,8 @@
         })
         .then(function(data) {
           hideError();
-          renderTable(data);
+          leaderboardData = data;
+          renderTable();
           lastUpdated.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
         })
         .catch(function(err) {
@@ -282,10 +322,24 @@
         });
     }
 
-    // Initial fetch
-    fetchLeaderboard();
+    // Sort on header click
+    document.querySelectorAll('thead th[data-key]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var key = th.dataset.key;
+        if (sortKey === key) {
+          sortAsc = !sortAsc;
+        } else {
+          sortKey = key;
+          sortAsc = false;
+        }
+        renderTable();
+      });
+    });
 
-    // Auto-refresh every 30 seconds
+    // Hide retired toggle
+    hideRetiredCheckbox.addEventListener('change', renderTable);
+
+    fetchLeaderboard();
     refreshTimer = setInterval(fetchLeaderboard, 30000);
   </script>
 </body>
