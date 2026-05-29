@@ -22,11 +22,21 @@ class ModelConfig:
     def model_id(self) -> str:
         return self.model
 
+    @property
+    def provider_url(self) -> str:
+        if self.backend == OLLAMA_BACKEND:
+            base_model = self.model.split(":", 1)[0]
+            return f"https://ollama.com/library/{base_model}"
+        if self.backend == OPENROUTER_BACKEND:
+            return f"https://openrouter.ai/{self.model}"
+        raise ValueError(f"Unsupported AI backend: {self.backend}")
+
     def as_dict(self) -> dict[str, str]:
         return {
             "backend": self.backend,
             "model": self.model,
             "display_name": self.display_name,
+            "provider_url": self.provider_url,
         }
 
 

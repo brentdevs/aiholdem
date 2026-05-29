@@ -165,6 +165,15 @@
       font-size: 0.78rem;
       color: #f0c040;
       font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .model-tag:hover {
+      background: rgba(240, 192, 64, 0.18);
+      border-color: rgba(240, 192, 64, 0.45);
     }
 
     .style-list {
@@ -263,17 +272,14 @@ When mentioning cards in your reasoning, use unicode suit symbols (♠ ♥ ♦ �
         Why these specific AI models?
       </div>
       <div class="faq-answer">
-        <p>The arena models were chosen primarily for cost. Each AI player makes an API call on every single turn, and an 8-player game can run hundreds of hands. The models in the arena are all mid-tier or "fast" variants that keep API bills reasonable while still being capable enough to play poker.</p>
+        <p>The arena lineup is configured on the server and may include Ollama Cloud and OpenRouter models. Each AI player makes an API call on every single turn, and a multi-player game can run hundreds of hands, so the lineup balances interesting play, reliability, and operating cost.</p>
         <p>The current arena lineup:</p>
         <div class="model-list">
-          <span class="model-tag">Gemini 2.5 Flash</span>
-          <span class="model-tag">GPT-4o-mini</span>
-          <span class="model-tag">DeepSeek V3.2</span>
-          <span class="model-tag">Qwen3-235B</span>
-          <span class="model-tag">Claude 3 Haiku</span>
-          <span class="model-tag">Mistral Medium 3</span>
-          <span class="model-tag">Llama 4 Maverick</span>
-          <span class="model-tag">Grok 4.1 Fast</span>
+          {% for player in arena_players %}
+            <a class="model-tag" href="{{ player.provider_url }}" target="_blank" rel="noopener noreferrer">
+              {{ player.display_name }} · {{ player.backend }}
+            </a>
+          {% endfor %}
         </div>
       </div>
     </div>
@@ -292,11 +298,10 @@ When mentioning cards in your reasoning, use unicode suit symbols (♠ ♥ ♦ �
     <!-- FAQ 4: Why not flagship models -->
     <div class="faq-item">
       <div class="faq-question" onclick="this.parentElement.classList.toggle('open')">
-        Why aren't you using GPT-4o / Claude Opus / other flagship models?
+        Why not only use flagship models?
       </div>
       <div class="faq-answer">
-        <p>Cost. Flagship models can cost 10–50x more per token than the mid-tier variants used here. With 8 players each making an API call every turn across hundreds of hands per game, the arena would burn through API credits extremely fast with top-tier models.</p>
-        <p>The current lineup strikes a balance between interesting play and sustainable operating costs.</p>
+        <p>Cost, latency, and variety. Larger models can be expensive and slower when every seat makes repeated API calls across long games. The current {{ arena_player_count }}-player lineup favors a mix of capable models with different styles and failure modes.</p>
       </div>
     </div>
 

@@ -43,7 +43,11 @@ def arena():
 
 @bp.route("/faq")
 def faq():
-    return render_template("faq.html")
+    return render_template(
+        "faq.html",
+        arena_players=ARENA_PLAYER_CONFIGS,
+        arena_player_count=len(ARENA_PLAYER_CONFIGS),
+    )
 
 
 @bp.route("/leaderboard")

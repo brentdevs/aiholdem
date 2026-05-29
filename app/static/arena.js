@@ -324,7 +324,7 @@ const ActionLog = {
 // ---------------------------------------------------------------------------
 // Player label legend — maps P1/P2/... to model names for spectators
 // ---------------------------------------------------------------------------
-let _playerLabelMap = {};  // { "P1": "Gemini-2.5-flash-lite", ... }
+let _playerLabelMap = {};  // { "P1": "Deepseek-v4-pro", ... }
 
 function buildPlayerLabelMap(players) {
   _playerLabelMap = {};
