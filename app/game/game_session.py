@@ -20,15 +20,15 @@ STARTING_CHIPS = 1000
 
 # Blind schedule: (small_blind, big_blind) per level.
 # Level advances every HANDS_PER_BLIND_LEVEL hands.
-HANDS_PER_BLIND_LEVEL = 8
+HANDS_PER_BLIND_LEVEL = 10
 BLIND_SCHEDULE: list[tuple[int, int]] = [
-    (10,  20),   # level 0  — hands 1-8
-    (20,  40),   # level 1  — hands 9-16
-    (40,  80),   # level 2  — hands 17-24
-    (75,  150),  # level 3  — hands 25-32
-    (150, 300),  # level 4  — hands 33-40
-    (300, 600),  # level 5  — hands 41-48
-    (500, 1000), # level 6  — hands 49+  (stays here)
+    (10,  20),   # level 0  — hands 1-10
+    (20,  40),   # level 1  — hands 11-20
+    (40,  80),   # level 2  — hands 21-30
+    (75,  150),  # level 3  — hands 31-40
+    (150, 300),  # level 4  — hands 41-50
+    (300, 600),  # level 5  — hands 51-60
+    (500, 1000), # level 6  — hands 61+  (stays here)
 ]
 
 
