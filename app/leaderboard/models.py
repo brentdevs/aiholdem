@@ -3,11 +3,11 @@ from dataclasses import dataclass
 
 @dataclass
 class GameResult:
-    model_id: str          # e.g. "google/gemini-2.5-flash"
-    display_name: str      # e.g. "Gemini-2.5-flash"
-    placing: int           # 1 = winner, 2 = second, etc.
-    api_calls: int         # total API calls this game
-    api_failures: int      # total failures/timeouts this game
+    model_id: str  # e.g. "google/gemini-2.5-flash"
+    display_name: str  # e.g. "Gemini-2.5-flash"
+    placing: int  # 1 = winner, 2 = second, etc.
+    api_calls: int  # total API calls this game
+    api_failures: int  # total failures/timeouts this game
     total_latency_ms: int  # sum of response latencies in ms this game
 
 

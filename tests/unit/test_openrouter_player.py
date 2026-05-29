@@ -1,4 +1,5 @@
 """Unit tests for OpenRouterPlayer and helper functions."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -17,10 +18,10 @@ from app.ai.openrouter_player import (
 )
 from app.game.models import Action, ActionType
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_player(model=SUPPORTED_MODELS[0]) -> OpenRouterPlayer:
     return OpenRouterPlayer(player_id="p1", chips=1000, model=model)
@@ -53,6 +54,7 @@ def _mock_client(response_text: str):
 # OpenRouterPlayer basics
 # ---------------------------------------------------------------------------
 
+
 def test_provider_field():
     player = _make_player()
     assert player.provider == "openrouter"
@@ -79,6 +81,7 @@ def test_explicit_name_overrides_derived():
 # _derive_display_name
 # ---------------------------------------------------------------------------
 
+
 def test_derive_display_name_free():
     assert _derive_display_name("qwen/qwen3.6-plus:free") == "Qwen3.6-plus (free)"
 
@@ -94,6 +97,7 @@ def test_derive_display_name_no_provider():
 # ---------------------------------------------------------------------------
 # _serialize_history
 # ---------------------------------------------------------------------------
+
 
 def test_serialize_history_empty():
     assert _serialize_history([], {}) == ""
@@ -128,6 +132,7 @@ def test_serialize_history_all_in_includes_amount():
 # _build_prompt
 # ---------------------------------------------------------------------------
 
+
 def _base_game_state(**kwargs) -> dict:
     state = {
         "community_cards": [],
@@ -160,7 +165,9 @@ def test_build_prompt_includes_history_when_present():
 
 
 def test_build_prompt_includes_pot_and_position():
-    prompt = _build_prompt(_base_game_state(pot=350, position=3), [Action(type=ActionType.FOLD)], [], "p1")
+    prompt = _build_prompt(
+        _base_game_state(pot=350, position=3), [Action(type=ActionType.FOLD)], [], "p1"
+    )
     assert "350" in prompt
     assert "3" in prompt
 
@@ -168,6 +175,7 @@ def test_build_prompt_includes_pot_and_position():
 # ---------------------------------------------------------------------------
 # _extract_reasoning
 # ---------------------------------------------------------------------------
+
 
 def test_extract_reasoning_returns_text_before_keyword():
     result = _extract_reasoning("I have a strong hand. raise", "raise")
@@ -202,6 +210,7 @@ def test_extract_reasoning_keyword_mid_sentence_splits_on_first():
 # ---------------------------------------------------------------------------
 # _parse_action
 # ---------------------------------------------------------------------------
+
 
 def test_parse_action_fold():
     valid = [Action(type=ActionType.FOLD)]
@@ -336,6 +345,7 @@ def test_parse_json_response_raise_converts_to_all_in_when_total_exceeds_stack_p
 # decide_action — normal path
 # ---------------------------------------------------------------------------
 
+
 def test_decide_action_uses_correct_model():
     player = _make_player(model=SUPPORTED_MODELS[2])
     game_state = _base_game_state()
@@ -365,6 +375,7 @@ def test_decide_action_returns_parsed_action():
 # ---------------------------------------------------------------------------
 # decide_action — error paths
 # ---------------------------------------------------------------------------
+
 
 def test_decide_action_check_on_exception_when_available():
     player = _make_player()
@@ -425,6 +436,7 @@ def test_decide_action_fold_on_unparseable_no_check():
 # ---------------------------------------------------------------------------
 # decide_action — tuple return type (task 2.7)
 # ---------------------------------------------------------------------------
+
 
 def test_decide_action_returns_tuple():
     player = _make_player()

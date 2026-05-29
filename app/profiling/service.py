@@ -12,12 +12,12 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from psycopg2 import pool, OperationalError, DatabaseError
+from psycopg2 import DatabaseError, OperationalError, pool
 
 from app.profiling.hand_recorder import HandRecord
+from app.profiling.profile_formatter import format_profile, format_profiles_block
 from app.profiling.stat_aggregator import StatAggregator
 from app.profiling.style_classifier import classify_style
-from app.profiling.profile_formatter import format_profile, format_profiles_block
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +50,7 @@ class ProfilingService:
             return
 
         try:
-            self._pool = pool.SimpleConnectionPool(
-                minconn=1, maxconn=5, dsn=database_url
-            )
+            self._pool = pool.SimpleConnectionPool(minconn=1, maxconn=5, dsn=database_url)
             self._available = True
         except OperationalError:
             logger.error("Failed to connect to database — profiling disabled")
@@ -398,12 +396,12 @@ class ProfilingService:
                         continue
 
                     label = id_to_label.get(pid, pid)
-                    stats = aggregator.get_player_stats(
-                        conn, pid, window=self.stat_window_size
+                    stats = aggregator.get_player_stats(conn, pid, window=self.stat_window_size)
+                    style = (
+                        classify_style(stats, min_hands=self.min_hands_for_profile)
+                        if stats is not None
+                        else "Unknown"
                     )
-                    style = classify_style(
-                        stats, min_hands=self.min_hands_for_profile
-                    ) if stats is not None else "Unknown"
 
                     profile_str = format_profile(
                         label=label,

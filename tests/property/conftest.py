@@ -1,6 +1,7 @@
 from hypothesis import strategies as st
 from hypothesis.strategies import composite
-from app.game.models import Card, ActionType, Action
+
+from app.game.models import Action, ActionType, Card
 
 SUITS = ["S", "H", "D", "C"]
 RANKS = list(range(2, 15))
@@ -19,12 +20,14 @@ def unique_card_list(draw, min_size=5, max_size=7) -> list[Card]:
     """Generate a list of unique Cards (no duplicate rank+suit combos)."""
     full_deck = [Card(rank=r, suit=s) for r in RANKS for s in SUITS]
     size = draw(st.integers(min_value=min_size, max_value=max_size))
-    return draw(st.lists(
-        st.sampled_from(full_deck),
-        min_size=size,
-        max_size=size,
-        unique=True,
-    ))
+    return draw(
+        st.lists(
+            st.sampled_from(full_deck),
+            min_size=size,
+            max_size=size,
+            unique=True,
+        )
+    )
 
 
 @composite

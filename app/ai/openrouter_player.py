@@ -1,4 +1,5 @@
 """OpenRouter AI player — single implementation replacing ChatGPTPlayer and ClaudePlayer."""
+
 from __future__ import annotations
 
 import json
@@ -48,6 +49,7 @@ SUPPORTED_MODELS: list[str] = [
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _derive_display_name(model: str) -> str:
     """Derive a human-readable display name from a model string.
 
@@ -91,9 +93,7 @@ def _serialize_history(
 
 
 # Fixed glossary header included at the top of every prompt
-_PROMPT_GLOSSARY = (
-    "Action codes: F=fold X=check C=call R=raise A=all-in"
-)
+_PROMPT_GLOSSARY = "Action codes: F=fold X=check C=call R=raise A=all-in"
 
 
 _SUIT_UNICODE = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
@@ -138,20 +138,20 @@ def _build_prompt(
 
     self_label = id_to_label.get(self_player_id, "you")
 
-    community_str = ", ".join(
-        _card_str(c) if isinstance(c, dict) else repr(c)
-        for c in community
-    ) or "none"
+    community_str = (
+        ", ".join(_card_str(c) if isinstance(c, dict) else repr(c) for c in community) or "none"
+    )
 
-    hole_str = ", ".join(
-        _card_str(c) if isinstance(c, dict) else repr(c)
-        for c in hole_cards
-    ) or "unknown"
+    hole_str = (
+        ", ".join(_card_str(c) if isinstance(c, dict) else repr(c) for c in hole_cards) or "unknown"
+    )
 
     # Betting round label
     _phase_labels = {
-        "pre_flop": "Pre-Flop", "flop": "Flop",
-        "turn": "Turn", "river": "River",
+        "pre_flop": "Pre-Flop",
+        "flop": "Flop",
+        "turn": "Turn",
+        "river": "River",
     }
     round_name = _phase_labels.get(phase, phase or "Unknown")
 
@@ -207,8 +207,7 @@ def _build_prompt(
 
     # Effective stack: your stack vs. the largest active opponent stack
     opponent_stacks = [
-        p.get("chips", 0) for p in active_players
-        if p.get("player_id") != self_player_id
+        p.get("chips", 0) for p in active_players if p.get("player_id") != self_player_id
     ]
     effective_stack = min(self_stack, max(opponent_stacks)) if opponent_stacks else self_stack
 
@@ -234,9 +233,11 @@ def _build_prompt(
         f"Min raise: {min_raise}",
         f"Max raise: {self_stack} (your entire stack — raising more than your stack is not allowed, use all_in instead)",
         f"You have already put {already_in} chips in this betting round. "
-        + (f"You need to call {to_call} more chips to stay in."
-           if to_call > 0 else
-           "You have already matched the current bet (call cost is 0)."),
+        + (
+            f"You need to call {to_call} more chips to stay in."
+            if to_call > 0
+            else "You have already matched the current bet (call cost is 0)."
+        ),
         f"Players:\n{players_str}",
     ]
 
@@ -249,10 +250,10 @@ def _build_prompt(
 
     lines.append(f"Valid actions: {valid_str}")
     lines.append(
-        'Respond with a JSON object only — no markdown, no extra text:\n'
+        "Respond with a JSON object only — no markdown, no extra text:\n"
         '{"action": "<one of the valid actions>", "amount": <integer or null>, "reasoning": "<brief explanation in 1-3 sentences>"}\n'
         f'"amount" is the total size of YOUR bet this round (not the raise increment). {raise_example}. '
-        'It must be null for all other actions.\n'
+        "It must be null for all other actions.\n"
         '"action" must be exactly one of the valid action strings listed above.\n'
         'When mentioning cards in your reasoning, use unicode suit symbols (♠ ♥ ♦ ♣), e.g. "A♠ K♥".'
     )
@@ -306,11 +307,17 @@ def _parse_json_response(
 
     # Map action string to ActionType — includes single-letter codes some models use
     action_type_map = {
-        "fold": ActionType.FOLD,   "f": ActionType.FOLD,
-        "check": ActionType.CHECK, "x": ActionType.CHECK,
-        "call": ActionType.CALL,   "c": ActionType.CALL,
-        "raise": ActionType.RAISE, "r": ActionType.RAISE,
-        "all_in": ActionType.ALL_IN, "all-in": ActionType.ALL_IN, "a": ActionType.ALL_IN,
+        "fold": ActionType.FOLD,
+        "f": ActionType.FOLD,
+        "check": ActionType.CHECK,
+        "x": ActionType.CHECK,
+        "call": ActionType.CALL,
+        "c": ActionType.CALL,
+        "raise": ActionType.RAISE,
+        "r": ActionType.RAISE,
+        "all_in": ActionType.ALL_IN,
+        "all-in": ActionType.ALL_IN,
+        "a": ActionType.ALL_IN,
     }
     action_type = action_type_map.get(action_str)
     if action_type is None:
@@ -399,7 +406,9 @@ def _parse_action(
         if keyword in text_lower:
             if action_type in valid_types:
                 if action_type == ActionType.RAISE:
-                    match = re.search(r"raise\s+(\d+)", text_lower) or re.search(r"raise\s+(\d+)", text.lower())
+                    match = re.search(r"raise\s+(\d+)", text_lower) or re.search(
+                        r"raise\s+(\d+)", text.lower()
+                    )
                     amount = int(match.group(1)) if match else min_raise
                     # Raise amount is the total bet level for this round, not extra chips.
                     max_raise_total = player_round_contrib + player_chips
@@ -461,8 +470,7 @@ class OpenRouterPlayer(AIPlayer):
                 players = game_state.get("players", [])
                 player_ids = [p.get("player_id", "") for p in players]
                 id_to_label = {
-                    p.get("player_id", ""): f"P{i}"
-                    for i, p in enumerate(players, start=1)
+                    p.get("player_id", ""): f"P{i}" for i, p in enumerate(players, start=1)
                 }
                 game_id = game_state.get("session_id", "")
                 profiles_block = self.profiling_service.get_opponent_profiles(
@@ -474,19 +482,27 @@ class OpenRouterPlayer(AIPlayer):
         except Exception as exc:
             logger.warning(
                 "Failed to fetch opponent profiles session=%s player=%s: %s",
-                session_id, self.player_id, exc,
+                session_id,
+                self.player_id,
+                exc,
             )
             profiles_block = None
 
         self.game_api_calls += 1
         prompt = "<not built>"
         try:
-            prompt = _build_prompt(game_state, valid_actions, history, self.player_id, profiles_block=profiles_block)
+            prompt = _build_prompt(
+                game_state, valid_actions, history, self.player_id, profiles_block=profiles_block
+            )
             logger.debug(
                 "OpenRouterPlayer requesting action session=%s player=%s model=%s\nPROMPT:\n%s",
-                session_id, self.player_id, self.model, prompt,
+                session_id,
+                self.player_id,
+                self.model,
+                prompt,
             )
             import eventlet
+
             call_start = time.monotonic()
             with eventlet.Timeout(20, TimeoutError):
                 with OpenRouter(api_key=os.getenv("OPENROUTER_API_KEY")) as client:
@@ -503,7 +519,10 @@ class OpenRouterPlayer(AIPlayer):
             text = text.strip().strip("'\"`")
             logger.debug(
                 "OpenRouterPlayer raw response session=%s player=%s model=%s response=%r",
-                session_id, self.player_id, self.model, text,
+                session_id,
+                self.player_id,
+                self.model,
+                text,
             )
             # Try JSON parsing first; fall back to keyword matching for non-compliant models
             self_player = next(
@@ -523,7 +542,10 @@ class OpenRouterPlayer(AIPlayer):
                 action, reasoning = result
                 logger.debug(
                     "OpenRouterPlayer action decided (json) session=%s player=%s action=%s amount=%s",
-                    session_id, self.player_id, action.type.value, action.amount or "",
+                    session_id,
+                    self.player_id,
+                    action.type.value,
+                    action.amount or "",
                 )
                 return (action, reasoning)
             # Fallback: keyword parsing
@@ -537,21 +559,30 @@ class OpenRouterPlayer(AIPlayer):
             if action is not None:
                 logger.debug(
                     "OpenRouterPlayer action decided (keyword) session=%s player=%s action=%s amount=%s",
-                    session_id, self.player_id, action.type.value, action.amount or "",
+                    session_id,
+                    self.player_id,
+                    action.type.value,
+                    action.amount or "",
                 )
                 action_keyword = action.type.value
                 reasoning = _extract_reasoning(text, action_keyword)
                 return (action, reasoning)
             logger.warning(
                 "OpenRouterPlayer unparseable response session=%s player=%s model=%s response=%r\nPROMPT:\n%s",
-                session_id, self.player_id, self.model, text, prompt,
+                session_id,
+                self.player_id,
+                self.model,
+                text,
+                prompt,
             )
             return (_check_or_fold(), "No reasoning provided")
         except TimeoutError:
             self.game_api_failures += 1
             logger.error(
                 "OpenRouterPlayer timed out (20s) session=%s player=%s model=%s",
-                session_id, self.player_id, self.model,
+                session_id,
+                self.player_id,
+                self.model,
             )
             return (_check_or_fold(), "⏱ Response timed out (20s) — defaulted to check/fold")
         except Exception as exc:
@@ -562,6 +593,7 @@ class OpenRouterPlayer(AIPlayer):
             clean: str | None = None
             if "body.id" in exc_str and "'error'" in exc_str:
                 import re as _re
+
                 m = _re.search(r"'message':\s*'([^']+)'", exc_str)
                 clean = m.group(1) if m else "upstream API error"
             if clean is None:
@@ -572,11 +604,17 @@ class OpenRouterPlayer(AIPlayer):
                     clean = f"{type(exc).__name__}: (error message contained prompt text)"
             logger.error(
                 "OpenRouterPlayer API error session=%s player=%s model=%s error=%s",
-                session_id, self.player_id, self.model, clean,
+                session_id,
+                self.player_id,
+                self.model,
+                clean,
             )
             logger.debug(
                 "OpenRouterPlayer failed prompt session=%s player=%s model=%s\nPROMPT:\n%s",
-                session_id, self.player_id, self.model, prompt,
+                session_id,
+                self.player_id,
+                self.model,
+                prompt,
             )
             return (_check_or_fold(), "API error — defaulted to check/fold")
 

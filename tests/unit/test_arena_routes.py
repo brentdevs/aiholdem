@@ -1,5 +1,7 @@
 """Unit tests for the /arena route."""
+
 import pytest
+
 from app import create_app
 
 

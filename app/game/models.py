@@ -46,8 +46,8 @@ class SessionStatus(str, Enum):
 
 @dataclass(frozen=True)
 class Card:
-    rank: int   # 2–14 (14 = Ace)
-    suit: str   # 'S', 'H', 'D', 'C'
+    rank: int  # 2–14 (14 = Ace)
+    suit: str  # 'S', 'H', 'D', 'C'
 
     def __post_init__(self) -> None:
         if not (2 <= self.rank <= 14):
@@ -64,8 +64,8 @@ class Card:
 @dataclass
 class HandResult:
     rank: HandRank
-    tiebreakers: list[int]   # descending card values for kicker comparison
-    cards: list[Card]        # the best 5 cards selected
+    tiebreakers: list[int]  # descending card values for kicker comparison
+    cards: list[Card]  # the best 5 cards selected
 
 
 @dataclass
@@ -98,7 +98,7 @@ class Hand:
 @dataclass
 class MoveLog:
     player_name: str
-    phase: str          # e.g. "pre_flop"
-    action: str         # e.g. "raise"
+    phase: str  # e.g. "pre_flop"
+    action: str  # e.g. "raise"
     amount: int | None
     reasoning: str

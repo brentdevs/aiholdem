@@ -13,27 +13,21 @@ class PotManager:
         """Deduct blind from player chips (capped at their stack) and record contribution."""
         actual = min(amount, player.chips)
         player.chips -= actual
-        self.contributions[player.player_id] = (
-            self.contributions.get(player.player_id, 0) + actual
-        )
+        self.contributions[player.player_id] = self.contributions.get(player.player_id, 0) + actual
         if self.contributions[player.player_id] > self.current_bet:
             self.current_bet = self.contributions[player.player_id]
 
     def place_bet(self, player, amount: int) -> None:
         """Record a bet where amount is the TOTAL the player is putting in this round."""
         player.chips -= amount
-        self.contributions[player.player_id] = (
-            self.contributions.get(player.player_id, 0) + amount
-        )
+        self.contributions[player.player_id] = self.contributions.get(player.player_id, 0) + amount
         if self.contributions[player.player_id] > self.current_bet:
             self.current_bet = self.contributions[player.player_id]
 
     def calculate_side_pots(self, all_players: list) -> list[Pot]:
         """Build Pot list from contributions, respecting all-in caps."""
         # Only consider players who contributed something
-        active_contributions = {
-            pid: amt for pid, amt in self.contributions.items() if amt > 0
-        }
+        active_contributions = {pid: amt for pid, amt in self.contributions.items() if amt > 0}
         if not active_contributions:
             return []
 
@@ -45,9 +39,7 @@ class PotManager:
 
         for level in levels:
             # Players eligible for this pot: contributed >= level
-            eligible = [
-                pid for pid, amt in active_contributions.items() if amt >= level
-            ]
+            eligible = [pid for pid, amt in active_contributions.items() if amt >= level]
             increment = level - prev_level
             pot_amount = increment * len(eligible)
             if pot_amount > 0:

@@ -2,16 +2,18 @@
 
 Requirements: 3.1, 3.4, 4.3, 4.4, 8.4, 9.3
 """
-from unittest.mock import patch, MagicMock
 
-from hypothesis import given, settings, assume, strategies as st
+from unittest.mock import MagicMock, patch
 
-from app.arena.arena_manager import ArenaManager, ARENA_PLAYER_MODELS, ARENA_SESSION_ID
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
+from app.arena.arena_manager import ARENA_PLAYER_MODELS, ARENA_SESSION_ID, ArenaManager
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_manager() -> ArenaManager:
     """Return a fresh ArenaManager with start_game mocked to avoid real game logic."""
@@ -22,6 +24,7 @@ def make_manager() -> ArenaManager:
 # Property 2: Arena session singleton invariant
 # Validates: Requirements 3.1, 3.4
 # ---------------------------------------------------------------------------
+
 
 # Feature: ai-spectator-arena, Property 2: Arena session singleton invariant
 @settings(max_examples=100)
@@ -50,6 +53,7 @@ def test_singleton_invariant(n):
 # Validates: Requirements 4.3, 4.4
 # ---------------------------------------------------------------------------
 
+
 # Feature: ai-spectator-arena, Property 3: Arena players match ARENA_PLAYER_MODELS
 @settings(max_examples=50)
 @given(reset_count=st.integers(min_value=1, max_value=5))
@@ -76,6 +80,7 @@ def test_arena_players_match_models(reset_count):
 # Validates: Requirements 4.4
 # ---------------------------------------------------------------------------
 
+
 # Feature: ai-spectator-arena, Property 4: All arena players are AI players
 @settings(max_examples=50)
 @given(reset_count=st.integers(min_value=0, max_value=3))
@@ -93,9 +98,9 @@ def test_all_players_are_ai(reset_count):
             session = manager._create_session()
 
     for player in session.players:
-        assert hasattr(player, "provider"), (
-            f"Player {player.player_id} is missing 'provider' — must be an AI player"
-        )
+        assert hasattr(
+            player, "provider"
+        ), f"Player {player.player_id} is missing 'provider' — must be an AI player"
 
 
 # ---------------------------------------------------------------------------
@@ -103,11 +108,14 @@ def test_all_players_are_ai(reset_count):
 # Validates: Requirements 8.4
 # ---------------------------------------------------------------------------
 
+
 # Feature: ai-spectator-arena, Property 8: Viewer count tracks joins and leaves accurately
 @settings(max_examples=100)
 @given(
     join_sids=st.lists(
-        st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"))),
+        st.text(
+            min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"))
+        ),
         min_size=1,
         max_size=10,
         unique=True,
@@ -146,11 +154,14 @@ def test_viewer_count_accuracy(join_sids, leave_count):
 # Validates: Requirements 9.3
 # ---------------------------------------------------------------------------
 
+
 # Feature: ai-spectator-arena, Property 11: arena_viewer_count emitted on every count change
 @settings(max_examples=100)
 @given(
     join_sids=st.lists(
-        st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"))),
+        st.text(
+            min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd"))
+        ),
         min_size=1,
         max_size=5,
         unique=True,
@@ -193,9 +204,9 @@ def test_viewer_count_event_emitted(join_sids, leave_count):
     # The last emitted count must match the final viewer_count
     if arena_viewer_count_calls:
         last_count = arena_viewer_count_calls[-1][1]["count"]
-        assert last_count == manager.viewer_count, (
-            f"Last emitted count {last_count} != manager.viewer_count {manager.viewer_count}"
-        )
+        assert (
+            last_count == manager.viewer_count
+        ), f"Last emitted count {last_count} != manager.viewer_count {manager.viewer_count}"
 
 
 # ---------------------------------------------------------------------------
@@ -243,20 +254,21 @@ def test_spectator_join_emits_state(viewer_count):
             client.disconnect()
 
     arena_state_events = [e for e in received if e["name"] == "arena_state"]
-    assert len(arena_state_events) >= 1, (
-        f"Expected at least one arena_state event, got: {[e['name'] for e in received]}"
-    )
+    assert (
+        len(arena_state_events) >= 1
+    ), f"Expected at least one arena_state event, got: {[e['name'] for e in received]}"
 
     payload = arena_state_events[0]["args"][0]
-    assert payload == expected_state, (
-        f"arena_state payload {payload!r} does not match expected {expected_state!r}"
-    )
+    assert (
+        payload == expected_state
+    ), f"arena_state payload {payload!r} does not match expected {expected_state!r}"
 
 
 # ---------------------------------------------------------------------------
 # Property 10: arena_state emitted on every state change
 # Validates: Requirements 9.2
 # ---------------------------------------------------------------------------
+
 
 # Feature: ai-spectator-arena, Property 10: arena_state emitted on every state change
 @settings(max_examples=100)
@@ -290,6 +302,6 @@ def test_arena_state_emitted_on_action(action_count):
             manager.broadcast_state()
 
     arena_state_calls = [e for e in emit_calls if e == "arena_state"]
-    assert len(arena_state_calls) == action_count, (
-        f"Expected {action_count} arena_state emissions, got {len(arena_state_calls)}"
-    )
+    assert (
+        len(arena_state_calls) == action_count
+    ), f"Expected {action_count} arena_state emissions, got {len(arena_state_calls)}"

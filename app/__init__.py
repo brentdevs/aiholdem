@@ -1,4 +1,5 @@
 """Flask application factory for the Texas Hold 'Em poker platform."""
+
 import logging
 import os
 
@@ -50,7 +51,7 @@ def create_app() -> Flask:
     flask_app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
     socketio.init_app(flask_app, async_mode="eventlet", cors_allowed_origins="*")
 
-    from app.arena.arena_manager import arena_manager, ARENA_PLAYER_MODELS
+    from app.arena.arena_manager import ARENA_PLAYER_MODELS, arena_manager
     from app.leaderboard.service import LeaderboardService
     from app.profiling.service import ProfilingService
 
@@ -76,6 +77,7 @@ def create_app() -> Flask:
         logger.error("Failed to pre-create arena session at startup: %s", exc)
 
     from app.routes import bp
+
     flask_app.register_blueprint(bp)
 
     import app.events  # noqa: F401 – side-effect import to register SocketIO handlers

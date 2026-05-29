@@ -1,4 +1,5 @@
 """Ollama Cloud AI player implementation."""
+
 from __future__ import annotations
 
 import logging
@@ -6,7 +7,12 @@ import os
 import time
 from typing import Any
 
-from app.ai.openrouter_player import _build_prompt, _extract_reasoning, _parse_action, _parse_json_response
+from app.ai.openrouter_player import (
+    _build_prompt,
+    _extract_reasoning,
+    _parse_action,
+    _parse_json_response,
+)
 from app.game.models import Action, ActionType
 from app.game.players import AIPlayer
 
@@ -105,8 +111,7 @@ class OllamaCloudPlayer(AIPlayer):
                 players = game_state.get("players", [])
                 player_ids = [p.get("player_id", "") for p in players]
                 id_to_label = {
-                    p.get("player_id", ""): f"P{i}"
-                    for i, p in enumerate(players, start=1)
+                    p.get("player_id", ""): f"P{i}" for i, p in enumerate(players, start=1)
                 }
                 profiles_block = self.profiling_service.get_opponent_profiles(
                     game_id=game_state.get("session_id", ""),
@@ -117,7 +122,9 @@ class OllamaCloudPlayer(AIPlayer):
         except Exception as exc:
             logger.warning(
                 "Failed to fetch opponent profiles session=%s player=%s: %s",
-                session_id, self.player_id, exc,
+                session_id,
+                self.player_id,
+                exc,
             )
             profiles_block = None
 
@@ -133,7 +140,10 @@ class OllamaCloudPlayer(AIPlayer):
             )
             logger.debug(
                 "OllamaCloudPlayer requesting action session=%s player=%s model=%s\nPROMPT:\n%s",
-                session_id, self.player_id, self.model, prompt,
+                session_id,
+                self.player_id,
+                self.model,
+                prompt,
             )
 
             api_key = os.getenv("OLLAMA_API_KEY")
@@ -157,7 +167,10 @@ class OllamaCloudPlayer(AIPlayer):
             text = _response_content(response).strip().strip("'\"`")
             logger.debug(
                 "OllamaCloudPlayer raw response session=%s player=%s model=%s response=%r",
-                session_id, self.player_id, self.model, text,
+                session_id,
+                self.player_id,
+                self.model,
+                text,
             )
 
             self_player = next(
@@ -177,7 +190,10 @@ class OllamaCloudPlayer(AIPlayer):
                 action, reasoning = result
                 logger.debug(
                     "OllamaCloudPlayer action decided (json) session=%s player=%s action=%s amount=%s",
-                    session_id, self.player_id, action.type.value, action.amount or "",
+                    session_id,
+                    self.player_id,
+                    action.type.value,
+                    action.amount or "",
                 )
                 return (action, reasoning)
 
@@ -191,20 +207,29 @@ class OllamaCloudPlayer(AIPlayer):
             if action is not None:
                 logger.debug(
                     "OllamaCloudPlayer action decided (keyword) session=%s player=%s action=%s amount=%s",
-                    session_id, self.player_id, action.type.value, action.amount or "",
+                    session_id,
+                    self.player_id,
+                    action.type.value,
+                    action.amount or "",
                 )
                 return (action, _extract_reasoning(text, action.type.value))
 
             logger.warning(
                 "OllamaCloudPlayer unparseable response session=%s player=%s model=%s response=%r\nPROMPT:\n%s",
-                session_id, self.player_id, self.model, text, prompt,
+                session_id,
+                self.player_id,
+                self.model,
+                text,
+                prompt,
             )
             return (_check_or_fold(), "No reasoning provided")
         except TimeoutError:
             self.game_api_failures += 1
             logger.error(
                 "OllamaCloudPlayer timed out (20s) session=%s player=%s model=%s",
-                session_id, self.player_id, self.model,
+                session_id,
+                self.player_id,
+                self.model,
             )
             return (_check_or_fold(), "Response timed out (20s) - defaulted to check/fold")
         except Exception as exc:
@@ -215,11 +240,17 @@ class OllamaCloudPlayer(AIPlayer):
                 clean = f"{type(exc).__name__}: (error message contained prompt text)"
             logger.error(
                 "OllamaCloudPlayer API error session=%s player=%s model=%s error=%s",
-                session_id, self.player_id, self.model, clean,
+                session_id,
+                self.player_id,
+                self.model,
+                clean,
             )
             logger.debug(
                 "OllamaCloudPlayer failed prompt session=%s player=%s model=%s\nPROMPT:\n%s",
-                session_id, self.player_id, self.model, prompt,
+                session_id,
+                self.player_id,
+                self.model,
+                prompt,
             )
             return (_check_or_fold(), "API error - defaulted to check/fold")
 

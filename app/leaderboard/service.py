@@ -1,5 +1,7 @@
 import logging
-from psycopg2 import pool, OperationalError, DatabaseError
+
+from psycopg2 import DatabaseError, OperationalError, pool
+
 from app.leaderboard.models import GameResult
 
 logger = logging.getLogger(__name__)
@@ -15,9 +17,7 @@ class LeaderboardService:
             return
 
         try:
-            self._pool = pool.SimpleConnectionPool(
-                minconn=1, maxconn=5, dsn=database_url
-            )
+            self._pool = pool.SimpleConnectionPool(minconn=1, maxconn=5, dsn=database_url)
             self._available = True
         except OperationalError:
             logger.error("Failed to connect to database — leaderboard disabled")
@@ -62,7 +62,8 @@ class LeaderboardService:
                 with conn.cursor() as cur:
                     for result in results:
                         win_value = 1 if result.placing == 1 else 0
-                        cur.execute("""
+                        cur.execute(
+                            """
                             INSERT INTO leaderboard
                                 (model_id, display_name, games_played, wins,
                                  placing_sum, api_calls, api_failures, latency_sum_ms, retired)
@@ -75,15 +76,17 @@ class LeaderboardService:
                                 api_calls      = leaderboard.api_calls + EXCLUDED.api_calls,
                                 api_failures   = leaderboard.api_failures + EXCLUDED.api_failures,
                                 latency_sum_ms = leaderboard.latency_sum_ms + EXCLUDED.latency_sum_ms;
-                        """, (
-                            result.model_id,
-                            result.display_name,
-                            win_value,
-                            result.placing,
-                            result.api_calls,
-                            result.api_failures,
-                            result.total_latency_ms,
-                        ))
+                        """,
+                            (
+                                result.model_id,
+                                result.display_name,
+                                win_value,
+                                result.placing,
+                                result.api_calls,
+                                result.api_failures,
+                                result.total_latency_ms,
+                            ),
+                        )
                 conn.commit()
             finally:
                 self._pool.putconn(conn)

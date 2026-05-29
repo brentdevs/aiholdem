@@ -1,4 +1,5 @@
 """Arena manager — singleton that owns the always-on AI spectator game session."""
+
 from __future__ import annotations
 
 import logging
@@ -8,12 +9,12 @@ import time
 
 import eventlet
 
-from app.game.game_session import GameSession, STARTING_CHIPS, BLIND_SCHEDULE
-from app.game.models import SessionStatus, ActionType
-from app.game.players import AIPlayer
 from app.ai.model_config import ModelConfig, load_arena_player_configs
 from app.ai.ollama_player import OllamaCloudPlayer
 from app.ai.openrouter_player import OpenRouterPlayer
+from app.game.game_session import BLIND_SCHEDULE, STARTING_CHIPS, GameSession
+from app.game.models import ActionType, SessionStatus
+from app.game.players import AIPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,9 @@ class ArenaManager:
     def __init__(self) -> None:
         self.session: GameSession | None = None
         self.viewer_count: int = 0
-        self._pause_on_empty: bool = os.environ.get("ARENA_PAUSE_ON_EMPTY", "true").lower() != "false"
+        self._pause_on_empty: bool = (
+            os.environ.get("ARENA_PAUSE_ON_EMPTY", "true").lower() != "false"
+        )
         self.paused: bool = self._pause_on_empty  # start unpaused if pause-on-empty is disabled
         self._viewer_sids: set[str] = set()
         self._lock: threading.RLock = threading.RLock()
@@ -58,7 +61,9 @@ class ArenaManager:
             self.viewer_count = len(self._viewer_sids)
             if was_paused and self.viewer_count > 0:
                 self.paused = False
-                logger.info("Arena resumed — viewer joined sid=%s count=%d", socket_id, self.viewer_count)
+                logger.info(
+                    "Arena resumed — viewer joined sid=%s count=%d", socket_id, self.viewer_count
+                )
                 # Resume AI loop if session is active
                 if self.session is not None and self.session.status == SessionStatus.ACTIVE:
                     self._start_ai_loop()
@@ -75,6 +80,7 @@ class ArenaManager:
     def broadcast_state(self) -> None:
         """Emit arena_state to the arena room with current session public state."""
         from app import socketio
+
         if self.session is None:
             return
         state = self.get_arena_state()
@@ -114,6 +120,7 @@ class ArenaManager:
     def broadcast_viewer_count(self) -> None:
         """Emit arena_viewer_count with current count to the arena room."""
         from app import socketio
+
         socketio.emit("arena_viewer_count", {"count": self.viewer_count}, room=ARENA_SESSION_ID)
 
     # ------------------------------------------------------------------
@@ -135,6 +142,7 @@ class ArenaManager:
                 return
             self._loop_running = True
         from app import socketio
+
         socketio.start_background_task(self._dispatch_ai_turn, session)
 
     def _mark_loop_idle(self, session: GameSession | None = None) -> None:
@@ -157,6 +165,7 @@ class ArenaManager:
             self._loop_running = False
             self._inter_hand_pause_running = True
         from app import socketio
+
         socketio.start_background_task(self._inter_hand_pause)
 
     def _schedule_reset_after_complete(self, session: GameSession) -> None:
@@ -170,6 +179,7 @@ class ArenaManager:
             self._loop_running = False
             self._reset_running = True
         from app import socketio
+
         socketio.start_background_task(self._reset_after_complete)
 
     def _dispatch_ai_turn(self, session: GameSession) -> None:
@@ -201,9 +211,7 @@ class ArenaManager:
             return
 
         hand = session.current_hand
-        current = next(
-            (p for p in active if p.player_id == hand.current_player_id), None
-        )
+        current = next((p for p in active if p.player_id == hand.current_player_id), None)
         # Skip all-in players — they have no action to take.
         # Use a loop instead of recursion to avoid stack overflow when the
         # game session keeps pointing at the same all-in player.
@@ -220,16 +228,13 @@ class ArenaManager:
                 self.broadcast_state()
                 # Re-enter dispatch from the top (non-recursively via background task)
                 from app import socketio
+
                 socketio.start_background_task(self._dispatch_ai_turn, session)
                 return
             logger.debug("Arena skipping all-in player %s", current.player_id)
             # Advance current_player_id in the session so we don't loop on the same player
-            hand.current_player_id = session._next_active_player_id(
-                current.player_id, active
-            )
-            current = next(
-                (p for p in active if p.player_id == hand.current_player_id), None
-            )
+            hand.current_player_id = session._next_active_player_id(current.player_id, active)
+            current = next((p for p in active if p.player_id == hand.current_player_id), None)
         if current is None:
             self._mark_loop_idle(session)
             return
@@ -239,6 +244,7 @@ class ArenaManager:
 
         # Run the AI turn in a background task
         from app import socketio
+
         socketio.start_background_task(self._run_ai_turn, session, current)
 
     def _run_ai_turn(self, session: GameSession, ai_player: AIPlayer) -> None:
@@ -252,7 +258,9 @@ class ArenaManager:
         start = time.monotonic()
         logger.debug(
             "Arena AI turn session=%s player=%s model=%s",
-            session.session_id, ai_player.player_id, getattr(ai_player, "model", "?"),
+            session.session_id,
+            ai_player.player_id,
+            getattr(ai_player, "model", "?"),
         )
 
         game_state = session.get_player_state(ai_player.player_id)
@@ -274,7 +282,9 @@ class ArenaManager:
         except ValueError as exc:
             logger.error(
                 "Arena AI action failed session=%s player=%s error=%s",
-                session.session_id, ai_player.player_id, exc,
+                session.session_id,
+                ai_player.player_id,
+                exc,
             )
             # Force a safe fallback action so we don't retry the same player forever
             fallback = None
@@ -291,13 +301,16 @@ class ArenaManager:
             if fallback is not None:
                 try:
                     session.apply_action(
-                        ai_player.player_id, fallback,
+                        ai_player.player_id,
+                        fallback,
                         reasoning="Fallback — original action was invalid",
                     )
                 except ValueError as fallback_exc:
                     logger.error(
                         "Arena AI fallback also failed session=%s player=%s error=%s",
-                        session.session_id, ai_player.player_id, fallback_exc,
+                        session.session_id,
+                        ai_player.player_id,
+                        fallback_exc,
                     )
 
         self._track_eliminations()
@@ -374,30 +387,42 @@ class ArenaManager:
                     self._elimination_order.append(p.player_id)
 
         # Record game results to leaderboard
-        if self.session is not None and self.leaderboard_service is not None and self.leaderboard_service.available:
+        if (
+            self.session is not None
+            and self.leaderboard_service is not None
+            and self.leaderboard_service.available
+        ):
             try:
-                from app.leaderboard.models import compute_placings, GameResult
+                from app.leaderboard.models import GameResult, compute_placings
+
                 placings = compute_placings(self._elimination_order)
                 results: list[GameResult] = []
                 for p in self.session.players:
                     if isinstance(p, AIPlayer) and hasattr(p, "model"):
-                        results.append(GameResult(
-                            model_id=p.model,
-                            display_name=p.name,
-                            placing=placings.get(p.player_id, len(self.session.players)),
-                            api_calls=p.game_api_calls,
-                            api_failures=p.game_api_failures,
-                            total_latency_ms=p.game_total_latency_ms,
-                        ))
+                        results.append(
+                            GameResult(
+                                model_id=p.model,
+                                display_name=p.name,
+                                placing=placings.get(p.player_id, len(self.session.players)),
+                                api_calls=p.game_api_calls,
+                                api_failures=p.game_api_failures,
+                                total_latency_ms=p.game_total_latency_ms,
+                            )
+                        )
                 self.leaderboard_service.record_game_results(results)
                 logger.info("Recorded arena game results for %d players", len(results))
             except Exception as exc:
                 logger.error("Failed to record arena game results: %s", exc)
 
         # Record game end for profiling
-        if self.session is not None and self.profiling_service is not None and self.profiling_service.available:
+        if (
+            self.session is not None
+            and self.profiling_service is not None
+            and self.profiling_service.available
+        ):
             try:
                 from app.leaderboard.models import compute_placings
+
                 placings = compute_placings(self._elimination_order)
                 player_results = [
                     {

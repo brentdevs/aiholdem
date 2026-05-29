@@ -27,7 +27,13 @@ class Evaluator:
 
         groups: list[list] = []
         for player, result in evaluated:
-            if groups and self._compare_results(result, self.best_hand(groups[-1][0].hole_cards + community)) == 0:
+            if (
+                groups
+                and self._compare_results(
+                    result, self.best_hand(groups[-1][0].hole_cards + community)
+                )
+                == 0
+            ):
                 groups[-1].append(player)
             else:
                 groups.append([player])
@@ -57,7 +63,9 @@ class Evaluator:
             return HandResult(rank=HandRank.ROYAL_FLUSH, tiebreakers=[], cards=cards)
 
         if is_flush and straight_high is not None:
-            return HandResult(rank=HandRank.STRAIGHT_FLUSH, tiebreakers=[straight_high], cards=cards)
+            return HandResult(
+                rank=HandRank.STRAIGHT_FLUSH, tiebreakers=[straight_high], cards=cards
+            )
 
         rank_counts = self._rank_counts(ranks)
         counts = sorted(rank_counts.items(), key=lambda x: (x[1], x[0]), reverse=True)
@@ -65,12 +73,16 @@ class Evaluator:
         if counts[0][1] == 4:
             quad_rank = counts[0][0]
             kicker = counts[1][0]
-            return HandResult(rank=HandRank.FOUR_OF_A_KIND, tiebreakers=[quad_rank, kicker], cards=cards)
+            return HandResult(
+                rank=HandRank.FOUR_OF_A_KIND, tiebreakers=[quad_rank, kicker], cards=cards
+            )
 
         if counts[0][1] == 3 and counts[1][1] == 2:
             trip_rank = counts[0][0]
             pair_rank = counts[1][0]
-            return HandResult(rank=HandRank.FULL_HOUSE, tiebreakers=[trip_rank, pair_rank], cards=cards)
+            return HandResult(
+                rank=HandRank.FULL_HOUSE, tiebreakers=[trip_rank, pair_rank], cards=cards
+            )
 
         if is_flush:
             return HandResult(rank=HandRank.FLUSH, tiebreakers=ranks, cards=cards)
@@ -81,18 +93,24 @@ class Evaluator:
         if counts[0][1] == 3:
             trip_rank = counts[0][0]
             kickers = sorted([r for r, c in counts if c == 1], reverse=True)
-            return HandResult(rank=HandRank.THREE_OF_A_KIND, tiebreakers=[trip_rank] + kickers, cards=cards)
+            return HandResult(
+                rank=HandRank.THREE_OF_A_KIND, tiebreakers=[trip_rank] + kickers, cards=cards
+            )
 
         if counts[0][1] == 2 and counts[1][1] == 2:
             high_pair = max(counts[0][0], counts[1][0])
             low_pair = min(counts[0][0], counts[1][0])
             kicker = counts[2][0]
-            return HandResult(rank=HandRank.TWO_PAIR, tiebreakers=[high_pair, low_pair, kicker], cards=cards)
+            return HandResult(
+                rank=HandRank.TWO_PAIR, tiebreakers=[high_pair, low_pair, kicker], cards=cards
+            )
 
         if counts[0][1] == 2:
             pair_rank = counts[0][0]
             kickers = sorted([r for r, c in counts if c == 1], reverse=True)
-            return HandResult(rank=HandRank.ONE_PAIR, tiebreakers=[pair_rank] + kickers, cards=cards)
+            return HandResult(
+                rank=HandRank.ONE_PAIR, tiebreakers=[pair_rank] + kickers, cards=cards
+            )
 
         return HandResult(rank=HandRank.HIGH_CARD, tiebreakers=ranks, cards=cards)
 

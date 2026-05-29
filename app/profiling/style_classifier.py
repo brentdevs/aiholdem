@@ -52,9 +52,7 @@ def classify_style(stats: _StatsLike, min_hands: int = 10) -> str:
     style = _classify_base_style(stats.vpip, stats.af)
 
     # --- Append tendency annotations ---
-    tendencies = _get_tendencies(
-        stats.fold_to_three_bet, stats.cbet, stats.wtsd
-    )
+    tendencies = _get_tendencies(stats.fold_to_three_bet, stats.cbet, stats.wtsd)
 
     if tendencies:
         return f"{style}. {' '.join(tendencies)}"
@@ -79,9 +77,7 @@ def _classify_base_style(vpip: int, af: float) -> str:
     return "Calling Station"
 
 
-def _get_tendencies(
-    fold_to_three_bet: int, cbet: int, wtsd: int
-) -> list[str]:
+def _get_tendencies(fold_to_three_bet: int, cbet: int, wtsd: int) -> list[str]:
     """Return tendency annotation strings based on extreme stat values."""
     tendencies: list[str] = []
 

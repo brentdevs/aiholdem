@@ -1,10 +1,12 @@
 """Property-based tests for AI Player Profiling stat flag computation."""
+
 from __future__ import annotations
 
-from hypothesis import given, settings, assume, strategies as st
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 from hypothesis.strategies import composite
 
-from app.profiling.hand_recorder import compute_stat_flags, PlayerFlags
+from app.profiling.hand_recorder import PlayerFlags, compute_stat_flags
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -97,8 +99,14 @@ def hand_history_strategy(draw):
 
             # Determine valid actions for this player
             available = _available_actions(
-                phase, pname, positions_map, raise_count, max_raises,
-                players_acted_this_round, last_raiser, bb_player
+                phase,
+                pname,
+                positions_map,
+                raise_count,
+                max_raises,
+                players_acted_this_round,
+                last_raiser,
+                bb_player,
             )
 
             action_code = draw(st.sampled_from(available))
@@ -128,14 +136,12 @@ def hand_history_strategy(draw):
 
             # If someone raised and we've gone through everyone, wrap around
             # so players before the raiser can respond (simplified: just extend)
-            if (action_code in ("R", "A") and
-                    i >= len(acting_order) and
-                    raise_count <= max_raises):
+            if action_code in ("R", "A") and i >= len(acting_order) and raise_count <= max_raises:
                 # Add remaining alive non-all-in players who haven't acted
                 # since the last raise
-                extra = [p for p in acting_order
-                         if p in alive and p not in all_in_players
-                         and p != pname]
+                extra = [
+                    p for p in acting_order if p in alive and p not in all_in_players and p != pname
+                ]
                 acting_order.extend(extra)
 
         if len(alive) < 2:
@@ -151,9 +157,7 @@ def _preflop_order(
 ) -> list[str]:
     """Return pre-flop acting order: UTG first, BB last."""
     # Position priority for pre-flop (UTG acts first, BB last)
-    preflop_priority = [
-        "UTG", "UTG+1", "MP", "MP+1", "HJ", "CO", "BTN", "SB", "SB/BTN", "BB"
-    ]
+    preflop_priority = ["UTG", "UTG+1", "MP", "MP+1", "HJ", "CO", "BTN", "SB", "SB/BTN", "BB"]
 
     def sort_key(name: str) -> int:
         pos = positions_map.get(name, "")
@@ -170,9 +174,7 @@ def _postflop_order(
     alive: set[str],
 ) -> list[str]:
     """Return post-flop acting order: SB first, BTN last."""
-    postflop_priority = [
-        "SB", "SB/BTN", "BB", "UTG", "UTG+1", "MP", "MP+1", "HJ", "CO", "BTN"
-    ]
+    postflop_priority = ["SB", "SB/BTN", "BB", "UTG", "UTG+1", "MP", "MP+1", "HJ", "CO", "BTN"]
 
     def sort_key(name: str) -> int:
         pos = positions_map.get(name, "")
@@ -369,9 +371,7 @@ def test_stat_flag_computation_correctness(data):
     Validates: Requirements 1.5, 1.6, 1.7, 1.9, 1.12
     """
     # Feature: ai-player-profiling, Property 1: Stat flag computation correctness
-    actions, player_names, positions_map, bb_player = data.draw(
-        hand_history_strategy()
-    )
+    actions, player_names, positions_map, bb_player = data.draw(hand_history_strategy())
 
     # Pick a player to test
     target = data.draw(st.sampled_from(player_names))
@@ -383,7 +383,7 @@ def test_stat_flag_computation_correctness(data):
         player_name=target,
         position=position,
         went_to_showdown=False,  # not tested in this property
-        won_hand=False,          # not tested in this property
+        won_hand=False,  # not tested in this property
         bb_player_name=bb_player,
     )
 

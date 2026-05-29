@@ -1,4 +1,5 @@
 """Unit tests for OllamaCloudPlayer."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -93,7 +94,9 @@ def test_decide_action_uses_ollama_cloud_client_and_model(monkeypatch):
     }
 
     monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
-    with patch("app.ai.ollama_player._create_ollama_client", return_value=mock_client) as create_client:
+    with patch(
+        "app.ai.ollama_player._create_ollama_client", return_value=mock_client
+    ) as create_client:
         action, reasoning = player.decide_action(game_state, valid)
 
     create_client.assert_called_once_with("test-key")

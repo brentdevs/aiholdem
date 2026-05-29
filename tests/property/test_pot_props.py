@@ -1,7 +1,10 @@
 """Property-based tests for PotManager."""
-from hypothesis import given, settings, strategies as st
-from app.game.pot_manager import PotManager
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from app.game.players import Player
+from app.game.pot_manager import PotManager
 
 
 def make_player(pid, chips):
