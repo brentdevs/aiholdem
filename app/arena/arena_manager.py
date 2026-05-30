@@ -132,56 +132,56 @@ class ArenaManager:
             self._loop_running = False
 
     async def _dispatch_ai_turn(self, session: GameSession) -> None:
-        """Run the current AI player's turn, broadcast state, chain to next."""
-        if self.paused:
-            self._mark_loop_idle(session)
-            return
-
-        if session is not self.session:
-            self._mark_loop_idle(session)
-            return
-
-        if session.status == SessionStatus.COMPLETE:
-            await self._schedule_reset_after_complete(session)
-            return
-
-        if session.showdown_pending:
-            await self._schedule_inter_hand_pause(session)
-            return
-
-        if session.status != SessionStatus.ACTIVE or session.current_hand is None:
-            self._mark_loop_idle(session)
-            return
-
-        active = session._get_active_players()
-        if not active:
-            self._mark_loop_idle(session)
-            return
-
-        hand = session.current_hand
-        current = next((p for p in active if p.player_id == hand.current_player_id), None)
-
-        skip_count = 0
-        while current is not None and current.chips == 0:
-            skip_count += 1
-            if skip_count > len(session.players):
-                logger.warning(
-                    "Arena all active players are all-in session=%s, advancing phase",
-                    session.session_id,
-                )
-                session._advance_phase_if_needed()
-                await self.broadcast_state()
-                await self._dispatch_ai_turn(session)
+        """Run AI player turns in a loop until the hand ends or pauses."""
+        while True:
+            if self.paused:
+                self._mark_loop_idle(session)
                 return
-            logger.debug("Arena skipping all-in player %s", current.player_id)
-            hand.current_player_id = session._next_active_player_id(current.player_id, active)
+
+            if session is not self.session:
+                self._mark_loop_idle(session)
+                return
+
+            if session.status == SessionStatus.COMPLETE:
+                await self._schedule_reset_after_complete(session)
+                return
+
+            if session.showdown_pending:
+                await self._schedule_inter_hand_pause(session)
+                return
+
+            if session.status != SessionStatus.ACTIVE or session.current_hand is None:
+                self._mark_loop_idle(session)
+                return
+
+            active = session._get_active_players()
+            if not active:
+                self._mark_loop_idle(session)
+                return
+
+            hand = session.current_hand
             current = next((p for p in active if p.player_id == hand.current_player_id), None)
 
-        if current is None or not isinstance(current, AIPlayer):
-            self._mark_loop_idle(session)
-            return
+            skip_count = 0
+            while current is not None and current.chips == 0:
+                skip_count += 1
+                if skip_count > len(session.players):
+                    logger.warning(
+                        "Arena all active players are all-in session=%s, advancing phase",
+                        session.session_id,
+                    )
+                    session._advance_phase_if_needed()
+                    await self.broadcast_state()
+                    continue
+                logger.debug("Arena skipping all-in player %s", current.player_id)
+                hand.current_player_id = session._next_active_player_id(current.player_id, active)
+                current = next((p for p in active if p.player_id == hand.current_player_id), None)
 
-        await self._run_ai_turn(session, current)
+            if current is None or not isinstance(current, AIPlayer):
+                self._mark_loop_idle(session)
+                return
+
+            await self._run_ai_turn(session, current)
 
     async def _run_ai_turn(self, session: GameSession, ai_player: AIPlayer) -> None:
         """Execute one AI turn, broadcast state, then chain to next."""
@@ -251,13 +251,6 @@ class ArenaManager:
         self._track_eliminations()
         await self.broadcast_state()
 
-        if session.status == SessionStatus.COMPLETE:
-            await self._schedule_reset_after_complete(session)
-        elif session.showdown_pending:
-            await self._schedule_inter_hand_pause(session)
-        else:
-            await self._dispatch_ai_turn(session)
-
     async def _schedule_inter_hand_pause(self, session: GameSession) -> None:
         """Start the inter-hand pause once for a given showdown."""
         if session is not self.session:
@@ -320,8 +313,8 @@ class ArenaManager:
             return
         await self.broadcast_state()
         self._inter_hand_pause_running = False
-        self._loop_running = True
-        await self._dispatch_ai_turn(session)
+        self._loop_running = False
+        self.start_ai_loop()
 
     async def _reset_after_complete(self) -> None:
         """Broadcast game-complete state, record results, sleep 10s, create new session."""
