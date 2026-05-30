@@ -93,6 +93,29 @@
       word-break: break-word;
     }
 
+    .log-entry[data-tip] {
+      cursor: help;
+      position: relative;
+    }
+
+    .log-entry[data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 0;
+      top: 100%;
+      z-index: 100;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      padding: 0.5rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      max-width: 320px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+      pointer-events: none;
+    }
+
     .log-entry.log-phase {
       color: #f0c040;
       font-weight: 700;
