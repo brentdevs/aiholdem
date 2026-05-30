@@ -2,28 +2,31 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from app.ai.model_config import (
-    DEFAULT_ARENA_PLAYER_CONFIGS,
     OLLAMA_BACKEND,
     OPENROUTER_BACKEND,
+    _validate_arena_entries,
     arena_players_env_value,
-    get_supported_model_configs,
     load_arena_player_configs,
 )
-from app.ai.ollama_player import SUPPORTED_OLLAMA_MODELS
 
 
-def test_default_lineup_matches_current_ollama_models():
-    configs = load_arena_player_configs(raw_value="")
+@pytest.fixture(autouse=True)
+def mock_available_models():
+    """Mock the provider API calls so tests don't need real credentials."""
+    models = {
+        OPENROUTER_BACKEND: {"google/gemini-2.5-flash", "openai/gpt-4o-mini"},
+        OLLAMA_BACKEND: {"deepseek-v4-pro", "kimi-k2.6", "qwen3.5:cloud"},
+    }
+    with patch("app.ai.model_config._get_available_models", return_value=models):
+        yield
 
-    assert [(c.backend, c.model) for c in configs] == list(DEFAULT_ARENA_PLAYER_CONFIGS)
-    assert [c.model for c in configs] == SUPPORTED_OLLAMA_MODELS
-    assert all(c.backend == OLLAMA_BACKEND for c in configs)
 
-
-def test_mixed_provider_lineup_parses_and_preserves_order():
+def test_valid_lineup_parses():
     configs = load_arena_player_configs(
         raw_value="ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash"
     )
@@ -42,7 +45,7 @@ def test_invalid_backend_fails_fast():
 
 
 def test_invalid_model_fails_fast():
-    with pytest.raises(ValueError, match="Unsupported ARENA_PLAYERS model"):
+    with pytest.raises(ValueError, match="not found on"):
         load_arena_player_configs(raw_value="ollama:not-a-model")
 
 
@@ -51,11 +54,9 @@ def test_duplicate_arena_entry_is_rejected():
         load_arena_player_configs(raw_value="ollama:deepseek-v4-pro,ollama:deepseek-v4-pro")
 
 
-def test_supported_model_configs_are_deduped_by_backend_and_model():
-    configs = get_supported_model_configs()
-    keys = [(c.backend, c.model) for c in configs]
-
-    assert len(keys) == len(set(keys))
+def test_empty_arena_players_raises():
+    with pytest.raises(ValueError, match="ARENA_PLAYERS environment variable must be set"):
+        load_arena_player_configs(raw_value="")
 
 
 def test_arena_players_env_value_round_trips():
@@ -63,6 +64,12 @@ def test_arena_players_env_value_round_trips():
         raw_value="ollama:kimi-k2.6,openrouter:google/gemini-2.5-flash"
     )
 
-    assert arena_players_env_value(configs) == (
-        "ollama:kimi-k2.6,openrouter:google/gemini-2.5-flash"
-    )
+    assert arena_players_env_value(configs) == "ollama:kimi-k2.6,openrouter:google/gemini-2.5-flash"
+
+
+def test_model_allowed_when_provider_unavailable():
+    """When provider fetch fails (empty set), models are allowed with a warning."""
+    empty = {OPENROUTER_BACKEND: set(), OLLAMA_BACKEND: set()}
+    with patch("app.ai.model_config._get_available_models", return_value=empty):
+        configs = load_arena_player_configs(raw_value="ollama:anything-goes")
+    assert configs[0].model == "anything-goes"

@@ -20,6 +20,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      ARENA_PLAYERS: "ollama:model-a,ollama:model-b,ollama:model-c"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
