@@ -15,4 +15,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "uvicorn run:app --host 0.0.0.0 --port 5000 --log-level $(echo ${LOG_LEVEL:-info} | tr A-Z a-z)"]
+CMD ["uvicorn", "run:app", "--host", "0.0.0.0", "--port", "5000", "--log-level", "error"]
