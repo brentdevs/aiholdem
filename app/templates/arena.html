@@ -810,6 +810,20 @@
       padding: 0.5rem;
     }
 
+    #mobile-nav {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      padding: 0.3rem 0;
+    }
+
+    #mobile-nav a {
+      color: #f0c040;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
     #mobile-community-section {
       display: flex;
       flex-direction: column;
@@ -1119,6 +1133,10 @@
 
   <!-- Mobile layout (hidden on desktop, shown on ≤768px) -->
   <div id="mobile-layout">
+    <div id="mobile-nav">
+      <a href="/leaderboard">🏆 Leaderboard</a>
+      <a href="/faq">❓ FAQ</a>
+    </div>
     <div id="mobile-community-section">
       <div id="mobile-phase-info">—</div>
       <div id="mobile-community-cards"></div>
