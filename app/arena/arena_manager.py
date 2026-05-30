@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import threading
 import time
-
-import eventlet
 
 from app.ai.model_config import ModelConfig, load_arena_player_configs
 from app.ai.ollama_player import OllamaCloudPlayer
@@ -32,9 +30,8 @@ class ArenaManager:
         self._pause_on_empty: bool = (
             os.environ.get("ARENA_PAUSE_ON_EMPTY", "true").lower() != "false"
         )
-        self.paused: bool = self._pause_on_empty  # start unpaused if pause-on-empty is disabled
+        self.paused: bool = self._pause_on_empty
         self._viewer_sids: set[str] = set()
-        self._lock: threading.RLock = threading.RLock()
         self._loop_running: bool = False
         self._inter_hand_pause_running: bool = False
         self._reset_running: bool = False
@@ -48,55 +45,46 @@ class ArenaManager:
 
     def get_or_create_session(self) -> GameSession:
         """Return existing session or create + start a new one."""
-        with self._lock:
-            if self.session is None:
-                self.session = self._create_session()
-            return self.session
+        if self.session is None:
+            self.session = self._create_session()
+        return self.session
 
     def on_viewer_join(self, socket_id: str) -> None:
         """Add socket to viewer set, update viewer_count, resume if was paused."""
-        with self._lock:
-            was_paused = self.paused
-            self._viewer_sids.add(socket_id)
-            self.viewer_count = len(self._viewer_sids)
-            if was_paused and self.viewer_count > 0:
-                self.paused = False
-                logger.info(
-                    "Arena resumed — viewer joined sid=%s count=%d", socket_id, self.viewer_count
-                )
-                # Resume AI loop if session is active
-                if self.session is not None and self.session.status == SessionStatus.ACTIVE:
-                    self._start_ai_loop()
+        was_paused = self.paused
+        self._viewer_sids.add(socket_id)
+        self.viewer_count = len(self._viewer_sids)
+        if was_paused and self.viewer_count > 0:
+            self.paused = False
+            logger.info(
+                "Arena resumed — viewer joined sid=%s count=%d", socket_id, self.viewer_count
+            )
+            if self.session is not None and self.session.status == SessionStatus.ACTIVE:
+                self.start_ai_loop()
 
     def on_viewer_leave(self, socket_id: str) -> None:
         """Remove socket from viewer set, update viewer_count, pause if zero."""
-        with self._lock:
-            self._viewer_sids.discard(socket_id)
-            self.viewer_count = len(self._viewer_sids)
-            if self.viewer_count == 0 and self._pause_on_empty:
-                self.paused = True
-                logger.info("Arena paused — no viewers remaining")
+        self._viewer_sids.discard(socket_id)
+        self.viewer_count = len(self._viewer_sids)
+        if self.viewer_count == 0 and self._pause_on_empty:
+            self.paused = True
+            logger.info("Arena paused — no viewers remaining")
 
-    def broadcast_state(self) -> None:
-        """Emit arena_state to the arena room with current session public state."""
-        from app import socketio
+    async def broadcast_state(self) -> None:
+        """Emit arena_state to the arena room."""
+        from app import sio
 
         if self.session is None:
             return
         state = self.get_arena_state()
-        socketio.emit("arena_state", state, room=ARENA_SESSION_ID)
+        await sio.emit("arena_state", state, room=ARENA_SESSION_ID)
 
     def get_arena_state(self) -> dict:
-        """Return spectator state for the all-AI arena.
-
-        Unlike the generic public state, arena spectators can see every AI
-        player's hole cards throughout the hand.
-        """
+        """Return spectator state — all hole cards visible."""
         if self.session is None:
             return {}
 
         state = self.session.get_public_state()
-        # Always expose hole cards for all players (arena is all-AI, no privacy needed)
         player_map = {p.player_id: p for p in self.session.players}
         for player_entry in state["players"]:
             pid = player_entry["player_id"]
@@ -117,88 +105,48 @@ class ArenaManager:
         ]
         return state
 
-    def broadcast_viewer_count(self) -> None:
-        """Emit arena_viewer_count with current count to the arena room."""
-        from app import socketio
+    async def broadcast_viewer_count(self) -> None:
+        """Emit arena_viewer_count to the arena room."""
+        from app import sio
 
-        socketio.emit("arena_viewer_count", {"count": self.viewer_count}, room=ARENA_SESSION_ID)
+        await sio.emit("arena_viewer_count", {"count": self.viewer_count}, room=ARENA_SESSION_ID)
 
     # ------------------------------------------------------------------
     # AI game loop
     # ------------------------------------------------------------------
 
-    def _start_ai_loop(self) -> None:
-        """Dispatch first AI turn via socketio.start_background_task.
-        Guards against starting a second concurrent loop."""
-        with self._lock:
-            if self._loop_running:
-                logger.debug("Arena AI loop already running — skipping duplicate start")
-                return
-            if self._inter_hand_pause_running or self._reset_running:
-                logger.debug("Arena transition task already running — skipping AI loop start")
-                return
-            session = self.session
-            if session is None:
-                return
-            self._loop_running = True
-        from app import socketio
-
-        socketio.start_background_task(self._dispatch_ai_turn, session)
+    def start_ai_loop(self) -> None:
+        """Schedule the AI loop as an asyncio task."""
+        if self._loop_running:
+            return
+        if self._inter_hand_pause_running or self._reset_running:
+            return
+        session = self.session
+        if session is None:
+            return
+        self._loop_running = True
+        asyncio.ensure_future(self._dispatch_ai_turn(session))
 
     def _mark_loop_idle(self, session: GameSession | None = None) -> None:
-        """Clear the active-loop flag unless a newer session has replaced this task."""
-        with self._lock:
-            if session is None or session is self.session:
-                self._loop_running = False
-
-    def _schedule_inter_hand_pause(self, session: GameSession) -> None:
-        """Start the inter-hand pause once for a given showdown."""
-        with self._lock:
-            if session is not self.session:
-                return
-            if self._inter_hand_pause_running:
-                logger.debug("Arena inter-hand pause already running — skipping duplicate start")
-                return
-            if self._reset_running:
-                logger.debug("Arena reset already running — skipping inter-hand pause")
-                return
+        if session is None or session is self.session:
             self._loop_running = False
-            self._inter_hand_pause_running = True
-        from app import socketio
 
-        socketio.start_background_task(self._inter_hand_pause)
-
-    def _schedule_reset_after_complete(self, session: GameSession) -> None:
-        """Start game reset once for a completed session."""
-        with self._lock:
-            if session is not self.session:
-                return
-            if self._reset_running:
-                logger.debug("Arena reset already running — skipping duplicate start")
-                return
-            self._loop_running = False
-            self._reset_running = True
-        from app import socketio
-
-        socketio.start_background_task(self._reset_after_complete)
-
-    def _dispatch_ai_turn(self, session: GameSession) -> None:
-        """Run the current AI player's turn, broadcast state, and chain to the next turn."""
+    async def _dispatch_ai_turn(self, session: GameSession) -> None:
+        """Run the current AI player's turn, broadcast state, chain to next."""
         if self.paused:
             self._mark_loop_idle(session)
             return
 
-        # Session may have been replaced (e.g. after reset) — bail if stale
         if session is not self.session:
             self._mark_loop_idle(session)
             return
 
         if session.status == SessionStatus.COMPLETE:
-            self._schedule_reset_after_complete(session)
+            await self._schedule_reset_after_complete(session)
             return
 
         if session.showdown_pending:
-            self._schedule_inter_hand_pause(session)
+            await self._schedule_inter_hand_pause(session)
             return
 
         if session.status != SessionStatus.ACTIVE or session.current_hand is None:
@@ -212,44 +160,32 @@ class ArenaManager:
 
         hand = session.current_hand
         current = next((p for p in active if p.player_id == hand.current_player_id), None)
-        # Skip all-in players — they have no action to take.
-        # Use a loop instead of recursion to avoid stack overflow when the
-        # game session keeps pointing at the same all-in player.
+
         skip_count = 0
         while current is not None and current.chips == 0:
             skip_count += 1
             if skip_count > len(session.players):
-                # All remaining players are all-in — force phase advancement
                 logger.warning(
                     "Arena all active players are all-in session=%s, advancing phase",
                     session.session_id,
                 )
                 session._advance_phase_if_needed()
-                self.broadcast_state()
-                # Re-enter dispatch from the top (non-recursively via background task)
-                from app import socketio
-
-                socketio.start_background_task(self._dispatch_ai_turn, session)
+                await self.broadcast_state()
+                await self._dispatch_ai_turn(session)
                 return
             logger.debug("Arena skipping all-in player %s", current.player_id)
-            # Advance current_player_id in the session so we don't loop on the same player
             hand.current_player_id = session._next_active_player_id(current.player_id, active)
             current = next((p for p in active if p.player_id == hand.current_player_id), None)
-        if current is None:
+
+        if current is None or not isinstance(current, AIPlayer):
             self._mark_loop_idle(session)
             return
-        if not isinstance(current, AIPlayer):
-            self._mark_loop_idle(session)
-            return
 
-        # Run the AI turn in a background task
-        from app import socketio
+        await self._run_ai_turn(session, current)
 
-        socketio.start_background_task(self._run_ai_turn, session, current)
-
-    def _run_ai_turn(self, session: GameSession, ai_player: AIPlayer) -> None:
-        """Execute one AI turn, broadcast state, then chain to the next turn."""
-        eventlet.sleep(0)  # yield to event loop
+    async def _run_ai_turn(self, session: GameSession, ai_player: AIPlayer) -> None:
+        """Execute one AI turn, broadcast state, then chain to next."""
+        await asyncio.sleep(0)
 
         if self.paused or session is not self.session:
             self._mark_loop_idle(session)
@@ -265,13 +201,13 @@ class ArenaManager:
 
         game_state = session.get_player_state(ai_player.player_id)
         valid_actions = session.get_valid_actions(ai_player)
-        action, reasoning = ai_player.decide_action(game_state, valid_actions)
+        action, reasoning = await ai_player.decide_action(game_state, valid_actions)
 
         # Enforce minimum 6s turn duration
         elapsed = time.monotonic() - start
         remaining = 6.0 - elapsed
         if remaining > 0:
-            eventlet.sleep(remaining)
+            await asyncio.sleep(remaining)
 
         if self.paused or session is not self.session:
             self._mark_loop_idle(session)
@@ -286,7 +222,6 @@ class ArenaManager:
                 ai_player.player_id,
                 exc,
             )
-            # Force a safe fallback action so we don't retry the same player forever
             fallback = None
             fallback_actions = session.get_valid_actions(ai_player)
             for t in (ActionType.CHECK, ActionType.FOLD):
@@ -314,27 +249,44 @@ class ArenaManager:
                     )
 
         self._track_eliminations()
-        self.broadcast_state()
+        await self.broadcast_state()
 
-        # Chain: showdown → inter-hand pause; complete → reset; else next turn
         if session.status == SessionStatus.COMPLETE:
-            self._schedule_reset_after_complete(session)
+            await self._schedule_reset_after_complete(session)
         elif session.showdown_pending:
-            self._schedule_inter_hand_pause(session)
+            await self._schedule_inter_hand_pause(session)
         else:
-            self._dispatch_ai_turn(session)
+            await self._dispatch_ai_turn(session)
 
-    def _inter_hand_pause(self) -> None:
-        """Background task: broadcast showdown state, sleep 10s, then start next hand."""
-        from app import socketio
+    async def _schedule_inter_hand_pause(self, session: GameSession) -> None:
+        """Start the inter-hand pause once for a given showdown."""
+        if session is not self.session:
+            return
+        if self._inter_hand_pause_running or self._reset_running:
+            return
+        self._loop_running = False
+        self._inter_hand_pause_running = True
+        await self._inter_hand_pause()
+
+    async def _schedule_reset_after_complete(self, session: GameSession) -> None:
+        """Start game reset once for a completed session."""
+        if session is not self.session:
+            return
+        if self._reset_running:
+            return
+        self._loop_running = False
+        self._reset_running = True
+        await self._reset_after_complete()
+
+    async def _inter_hand_pause(self) -> None:
+        """Broadcast showdown state, sleep 10s, then start next hand."""
+        from app import sio
 
         session = self.session
         if session is None:
-            with self._lock:
-                self._inter_hand_pause_running = False
+            self._inter_hand_pause_running = False
             return
 
-        # Build showdown state with inter_hand_ends_at timestamp
         state = session.get_public_state()
         state["showdown_pending"] = True
         state["inter_hand_ends_at"] = time.time() + 10
@@ -348,15 +300,14 @@ class ArenaManager:
             }
             for log in session._hand_move_logs
         ]
-        socketio.emit("arena_state", state, room=ARENA_SESSION_ID)
+        await sio.emit("arena_state", state, room=ARENA_SESSION_ID)
 
-        eventlet.sleep(10)
+        await asyncio.sleep(10)
 
         if self.viewer_count == 0 and self._pause_on_empty:
-            with self._lock:
-                self.paused = True
-                self._loop_running = False
-                self._inter_hand_pause_running = False
+            self.paused = True
+            self._loop_running = False
+            self._inter_hand_pause_running = False
             logger.info("Arena paused after inter-hand pause — no viewers")
             return
 
@@ -364,22 +315,18 @@ class ArenaManager:
             session.next_hand()
         except ValueError as exc:
             logger.error("Arena next_hand failed: %s", exc)
-            with self._lock:
-                self._loop_running = False
-                self._inter_hand_pause_running = False
-            return
-        self.broadcast_state()
-        with self._lock:
+            self._loop_running = False
             self._inter_hand_pause_running = False
-            self._loop_running = True
-        self._dispatch_ai_turn(session)
+            return
+        await self.broadcast_state()
+        self._inter_hand_pause_running = False
+        self._loop_running = True
+        await self._dispatch_ai_turn(session)
 
-    def _reset_after_complete(self) -> None:
-        """Background task: broadcast game-complete state, record results, sleep 10s, create new session."""
-        # Broadcast the game-complete state
-        self.broadcast_state()
+    async def _reset_after_complete(self) -> None:
+        """Broadcast game-complete state, record results, sleep 10s, create new session."""
+        await self.broadcast_state()
 
-        # Track final eliminations and add the winner
         self._track_eliminations()
         if self.session is not None:
             for p in self.session.players:
@@ -441,23 +388,20 @@ class ArenaManager:
             except Exception as exc:
                 logger.error("Failed to record arena game end: %s", exc)
 
-        eventlet.sleep(10)
+        await asyncio.sleep(10)
 
-        # Replace session with a fresh one
         new_session = self._create_session()
-        with self._lock:
-            self.session = new_session
-            self._loop_running = False
-            self._reset_running = False
+        self.session = new_session
+        self._loop_running = False
+        self._reset_running = False
 
         if self.viewer_count == 0 and self._pause_on_empty:
-            with self._lock:
-                self.paused = True
+            self.paused = True
             logger.info("Arena paused after game reset — no viewers")
         else:
-            self._start_ai_loop()
+            self.start_ai_loop()
 
-        self.broadcast_state()
+        await self.broadcast_state()
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -479,8 +423,6 @@ class ArenaManager:
         for config in ARENA_PLAYER_CONFIGS:
             model = config.model
             backend = config.backend
-            # Use model-based player_id so profiling stats stay tied to the model,
-            # not the slot index. Swapping a model starts with a clean profile.
             safe_model = model.replace("/", "_").replace(":", "_").replace(".", "_")
             player_id = f"arena_{backend}_{safe_model}"
             if backend == "ollama":

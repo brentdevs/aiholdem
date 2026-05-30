@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.ai.ollama_player import (
     OLLAMA_CLOUD_HOST,
@@ -82,22 +85,25 @@ def test_response_content_supports_object_response():
     assert _response_content(response) == "fold"
 
 
-def test_decide_action_uses_ollama_cloud_client_and_model(monkeypatch):
+@pytest.mark.asyncio
+async def test_decide_action_uses_ollama_cloud_client_and_model(monkeypatch):
     player = _make_player(model=SUPPORTED_OLLAMA_MODELS[2])
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
     mock_client = MagicMock()
-    mock_client.chat.return_value = {
-        "message": {
-            "content": '{"action": "check", "amount": null, "reasoning": "No bet to call."}'
+    mock_client.chat = AsyncMock(
+        return_value={
+            "message": {
+                "content": '{"action": "check", "amount": null, "reasoning": "No bet to call."}'
+            }
         }
-    }
+    )
 
     monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
     with patch(
         "app.ai.ollama_player._create_ollama_client", return_value=mock_client
     ) as create_client:
-        action, reasoning = player.decide_action(game_state, valid)
+        action, reasoning = await player.decide_action(game_state, valid)
 
     create_client.assert_called_once_with("test-key")
     mock_client.chat.assert_called_once()

@@ -4,52 +4,26 @@ from __future__ import annotations
 
 import logging
 
-from flask import request
-from flask_socketio import emit, join_room
-
-from app import socketio
+from app import sio
 from app.arena.arena_manager import ARENA_SESSION_ID, arena_manager
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _emit_error(code: str, message: str) -> None:
-    logger.warning("Emitting error code=%s message=%r", code, message)
-    emit("error", {"code": code, "message": message})
-
-
-# ---------------------------------------------------------------------------
-# Arena spectator events
-# ---------------------------------------------------------------------------
-
-
-@socketio.on("join_arena")
-def on_join_arena(data: dict) -> None:
-    logger.info("join_arena sid=%s", request.sid)
-    join_room(ARENA_SESSION_ID)
-    join_room(request.sid)
-    arena_manager.on_viewer_join(request.sid)
+@sio.on("join_arena")
+async def on_join_arena(sid: str, data: dict) -> None:
+    logger.info("join_arena sid=%s", sid)
+    await sio.enter_room(sid, ARENA_SESSION_ID)
+    arena_manager.on_viewer_join(sid)
     arena_manager.get_or_create_session()
-    emit("arena_state", arena_manager.get_arena_state())
-    arena_manager.broadcast_viewer_count()
+    state = arena_manager.get_arena_state()
+    await sio.emit("arena_state", state, to=sid)
+    await arena_manager.broadcast_viewer_count()
 
 
-# ---------------------------------------------------------------------------
-# Disconnection handling
-# ---------------------------------------------------------------------------
-
-
-@socketio.on("disconnect")
-def on_disconnect() -> None:
-    sid = request.sid
+@sio.on("disconnect")
+async def on_disconnect(sid: str) -> None:
     logger.debug("Client disconnected sid=%s", sid)
-
-    # Handle arena viewer disconnect
     if sid in arena_manager._viewer_sids:
         arena_manager.on_viewer_leave(sid)
-        arena_manager.broadcast_viewer_count()
+        await arena_manager.broadcast_viewer_count()

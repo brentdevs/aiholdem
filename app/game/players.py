@@ -35,7 +35,7 @@ class AIPlayer(Player):
         super().__init__(player_id, name, chips)
         self.provider = provider  # e.g. "openrouter" or "ollama"
 
-    def decide_action(self, game_state: dict, valid_actions: list[Action]) -> Action:
+    async def decide_action(self, game_state: dict, valid_actions: list[Action]) -> Action:
         raise NotImplementedError
 
     def __repr__(self) -> str:

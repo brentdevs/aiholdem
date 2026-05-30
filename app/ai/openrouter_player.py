@@ -446,7 +446,9 @@ class OpenRouterPlayer(AIPlayer):
         self.game_api_failures: int = 0
         self.game_total_latency_ms: int = 0
 
-    def decide_action(self, game_state: dict, valid_actions: list[Action]) -> tuple[Action, str]:
+    async def decide_action(
+        self, game_state: dict, valid_actions: list[Action]
+    ) -> tuple[Action, str]:
         session_id = game_state.get("session_id", "unknown")
         min_raise = game_state.get("min_raise", 0)
         history: list[tuple[str, str, str, int | None]] = game_state.get("hand_history", [])
@@ -501,17 +503,20 @@ class OpenRouterPlayer(AIPlayer):
                 self.model,
                 prompt,
             )
-            import eventlet
+            import asyncio
 
             call_start = time.monotonic()
-            with eventlet.Timeout(20, TimeoutError):
+
+            async def _call_openrouter():
                 with OpenRouter(api_key=os.getenv("OPENROUTER_API_KEY")) as client:
                     send_kwargs: dict = dict(
                         models=[self.model],
                         messages=[{"role": "user", "content": prompt}],
                         reasoning={"effort": "none"},
                     )
-                    response = client.chat.send(**send_kwargs)
+                    return await client.chat.send_async(**send_kwargs)
+
+            response = await asyncio.wait_for(_call_openrouter(), timeout=20)
             call_elapsed_ms = int((time.monotonic() - call_start) * 1000)
             self.game_total_latency_ms += call_elapsed_ms
             text = response.choices[0].message.content or "" if response.choices else ""

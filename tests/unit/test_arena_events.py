@@ -3,26 +3,9 @@
 Requirements: 8.2, 9.1, 9.3, 9.6
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from app import socketio
-from tests.shared_app import _app
-
-
-def _make_mock_session():
-    """Build a mock arena session with a realistic get_public_state return value."""
-    mock_session = MagicMock()
-    mock_session.get_public_state.return_value = {
-        "session_id": "arena",
-        "status": "active",
-        "players": [],
-        "community_cards": [],
-        "pot": 0,
-        "phase": "pre_flop",
-    }
-    return mock_session
 
 
 def _make_mock_arena_state():
@@ -33,10 +16,7 @@ def _make_mock_arena_state():
             {
                 "player_id": "p1",
                 "name": "AI 1",
-                "hole_cards": [
-                    {"rank": 14, "suit": "S"},
-                    {"rank": 13, "suit": "H"},
-                ],
+                "hole_cards": [{"rank": 14, "suit": "S"}, {"rank": 13, "suit": "H"}],
             }
         ],
         "community_cards": [],
@@ -51,53 +31,28 @@ def _make_mock_arena_state():
 # ---------------------------------------------------------------------------
 
 
-def test_join_arena_emits_state():
-    """Emitting join_arena causes the server to emit arena_state back.
+@pytest.mark.asyncio
+async def test_join_arena_emits_state():
+    """Validates: Requirements 9.1"""
+    from app import sio
+    from app.arena.arena_manager import arena_manager
 
-    Validates: Requirements 9.1
-    """
-    mock_session = _make_mock_session()
-
-    with patch("app.events.arena_manager") as mock_manager:
-        mock_manager.get_or_create_session.return_value = mock_session
-        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
-        mock_manager.on_viewer_join.return_value = None
-        mock_manager.broadcast_viewer_count.return_value = None
-
-        client = socketio.test_client(_app)
-        try:
-            client.get_received()  # clear any startup events
-            client.emit("join_arena", {})
-            received = client.get_received()
-        finally:
-            client.disconnect()
-
-    event_names = [e["name"] for e in received]
-    assert "arena_state" in event_names, f"Expected 'arena_state' in {event_names}"
-
-
-def test_join_arena_emits_serialized_arena_state_with_hole_cards():
-    """Initial join uses ArenaManager's arena serializer, including hole cards."""
-    mock_session = _make_mock_session()
     arena_state = _make_mock_arena_state()
 
-    with patch("app.events.arena_manager") as mock_manager:
-        mock_manager.get_or_create_session.return_value = mock_session
-        mock_manager.get_arena_state.return_value = arena_state
-        mock_manager.on_viewer_join.return_value = None
-        mock_manager.broadcast_viewer_count.return_value = None
+    with patch.object(arena_manager, "get_or_create_session"), patch.object(
+        arena_manager, "get_arena_state", return_value=arena_state
+    ), patch.object(arena_manager, "on_viewer_join"), patch.object(
+        sio, "emit", new_callable=AsyncMock
+    ) as mock_emit, patch.object(
+        sio, "enter_room", new_callable=AsyncMock
+    ):
+        arena_manager.broadcast_viewer_count = AsyncMock()
 
-        client = socketio.test_client(_app)
-        try:
-            client.get_received()
-            client.emit("join_arena", {})
-            received = client.get_received()
-        finally:
-            client.disconnect()
+        import app.events
 
-    mock_manager.get_arena_state.assert_called_once()
-    emitted_state = next(e["args"][0] for e in received if e["name"] == "arena_state")
-    assert emitted_state["players"][0]["hole_cards"] == arena_state["players"][0]["hole_cards"]
+        await app.events.on_join_arena("test-sid", {})
+
+        mock_emit.assert_any_call("arena_state", arena_state, to="test-sid")
 
 
 # ---------------------------------------------------------------------------
@@ -105,27 +60,26 @@ def test_join_arena_emits_serialized_arena_state_with_hole_cards():
 # ---------------------------------------------------------------------------
 
 
-def test_join_arena_increments_viewer_count():
-    """Joining the arena increments the viewer count via on_viewer_join.
+@pytest.mark.asyncio
+async def test_join_arena_calls_on_viewer_join():
+    """Validates: Requirements 8.4, 9.3"""
+    from app import sio
+    from app.arena.arena_manager import arena_manager
 
-    Validates: Requirements 8.4, 9.3
-    """
-    mock_session = _make_mock_session()
+    with patch.object(arena_manager, "get_or_create_session"), patch.object(
+        arena_manager, "get_arena_state", return_value=_make_mock_arena_state()
+    ), patch.object(arena_manager, "on_viewer_join") as mock_join, patch.object(
+        sio, "emit", new_callable=AsyncMock
+    ), patch.object(
+        sio, "enter_room", new_callable=AsyncMock
+    ):
+        arena_manager.broadcast_viewer_count = AsyncMock()
 
-    with patch("app.events.arena_manager") as mock_manager:
-        mock_manager.get_or_create_session.return_value = mock_session
-        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
-        mock_manager.on_viewer_join.return_value = None
-        mock_manager.broadcast_viewer_count.return_value = None
+        import app.events
 
-        client = socketio.test_client(_app)
-        try:
-            client.get_received()
-            client.emit("join_arena", {})
-            client.get_received()
-            mock_manager.on_viewer_join.assert_called_once()
-        finally:
-            client.disconnect()
+        await app.events.on_join_arena("test-sid", {})
+
+        mock_join.assert_called_once_with("test-sid")
 
 
 # ---------------------------------------------------------------------------
@@ -133,37 +87,26 @@ def test_join_arena_increments_viewer_count():
 # ---------------------------------------------------------------------------
 
 
-def test_disconnect_decrements_viewer_count():
-    """Disconnecting after joining calls on_viewer_leave to decrement viewer count.
+@pytest.mark.asyncio
+async def test_disconnect_calls_on_viewer_leave():
+    """Validates: Requirements 8.1, 8.4"""
+    from app import sio
+    from app.arena.arena_manager import arena_manager
 
-    Validates: Requirements 8.1, 8.4
-    """
-    mock_session = _make_mock_session()
+    arena_manager._viewer_sids = {"test-sid"}
 
-    with patch("app.events.arena_manager") as mock_manager:
-        mock_manager.get_or_create_session.return_value = mock_session
-        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
-        mock_manager.on_viewer_join.return_value = None
-        mock_manager.broadcast_viewer_count.return_value = None
-        mock_manager.on_viewer_leave.return_value = None
-        mock_manager._viewer_sids = set()
+    with patch.object(arena_manager, "on_viewer_leave") as mock_leave, patch.object(
+        sio, "emit", new_callable=AsyncMock
+    ):
+        arena_manager.broadcast_viewer_count = AsyncMock()
 
-        client = socketio.test_client(_app)
-        client.get_received()
+        import app.events
 
-        client.emit("join_arena", {})
-        client.get_received()
+        await app.events.on_disconnect("test-sid")
 
-        # Capture the sid that was registered
-        join_call_args = mock_manager.on_viewer_join.call_args
-        registered_sid = join_call_args[0][0]
+        mock_leave.assert_called_once_with("test-sid")
 
-        # Make _viewer_sids contain the sid so disconnect handler calls on_viewer_leave
-        mock_manager._viewer_sids = {registered_sid}
-
-        client.disconnect()
-
-        mock_manager.on_viewer_leave.assert_called_once_with(registered_sid)
+    arena_manager._viewer_sids = set()
 
 
 # ---------------------------------------------------------------------------
@@ -171,26 +114,23 @@ def test_disconnect_decrements_viewer_count():
 # ---------------------------------------------------------------------------
 
 
-def test_join_arena_resumes_paused_arena():
-    """When the arena is paused and a viewer joins, on_viewer_join is called (which sets paused=False).
+@pytest.mark.asyncio
+async def test_join_arena_resumes_paused_arena():
+    """Validates: Requirements 9.6, 8.2"""
+    from app import sio
+    from app.arena.arena_manager import arena_manager
 
-    Validates: Requirements 9.6, 8.2
-    """
-    mock_session = _make_mock_session()
+    with patch.object(arena_manager, "get_or_create_session"), patch.object(
+        arena_manager, "get_arena_state", return_value=_make_mock_arena_state()
+    ), patch.object(arena_manager, "on_viewer_join") as mock_join, patch.object(
+        sio, "emit", new_callable=AsyncMock
+    ), patch.object(
+        sio, "enter_room", new_callable=AsyncMock
+    ):
+        arena_manager.broadcast_viewer_count = AsyncMock()
 
-    with patch("app.events.arena_manager") as mock_manager:
-        mock_manager.paused = True
-        mock_manager.get_or_create_session.return_value = mock_session
-        mock_manager.get_arena_state.return_value = _make_mock_arena_state()
-        mock_manager.on_viewer_join.return_value = None
-        mock_manager.broadcast_viewer_count.return_value = None
+        import app.events
 
-        client = socketio.test_client(_app)
-        try:
-            client.get_received()
-            client.emit("join_arena", {})
-            client.get_received()
-            # on_viewer_join is the mechanism that sets paused=False
-            mock_manager.on_viewer_join.assert_called_once()
-        finally:
-            client.disconnect()
+        await app.events.on_join_arena("test-sid", {})
+
+        mock_join.assert_called_once_with("test-sid")

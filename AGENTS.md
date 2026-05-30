@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a Python 3.11 Flask + Flask-SocketIO Texas Hold'em arena. The entry point is `run.py`, which applies eventlet monkey patching before creating the app.
+This is a Python 3.11 Quart + python-socketio Texas Hold'em arena. The entry point is `run.py`, which creates the ASGI app combining Quart (HTTP) and python-socketio (WebSocket).
 
 - `app/game/`: core poker domain logic, session lifecycle, evaluator, dealer, and pot handling.
 - `app/ai/`: LLM-backed player implementations for OpenRouter and Ollama Cloud.
@@ -32,7 +32,7 @@ The frontend has no build step.
 
 Follow existing Python style: 4-space indentation, type hints where useful, dataclasses/enums for structured game state, and small helper functions for parsing or state transitions. Keep AI provider code behind `AIPlayer` subclasses and preserve shared prompt/response behavior when adding providers.
 
-Use `eventlet.sleep()` and `socketio.start_background_task()` for arena background work. Do not introduce blocking sleeps in the eventlet loop.
+Use `asyncio.sleep()` and `asyncio.ensure_future()` for arena background work. All arena loop methods are async coroutines.
 
 ## Testing Guidelines
 

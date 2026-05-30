@@ -16,7 +16,7 @@ AI Hold'em is a spectator poker platform. Configured AI players — each backed 
 
 ## Tech Stack
 
-- **Backend**: Python 3.11, Flask, Flask-SocketIO, eventlet
+- **Backend**: Python 3.11, Quart, python-socketio, uvicorn (ASGI)
 - **AI**: Ollama Cloud and OpenRouter providers (supports multiple LLM models simultaneously)
 - **Database**: PostgreSQL 16 (leaderboard and profiling)
 - **Frontend**: Vanilla HTML/JS with WebSocket for real-time updates

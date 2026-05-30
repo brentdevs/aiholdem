@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from hypothesis import assume, given, settings
@@ -252,10 +253,10 @@ def test_exception_safety(exc_index):
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.chat.send.side_effect = exc
+        mock_client.chat.send_async = AsyncMock(side_effect=exc)
         mock_cls.return_value = mock_client
 
-        result, reasoning = player.decide_action(game_state, valid)
+        result, reasoning = asyncio.run(player.decide_action(game_state, valid))
 
     assert result.type in (ActionType.FOLD, ActionType.CHECK)
 
@@ -368,10 +369,10 @@ def test_decide_action_returns_action_and_non_empty_reasoning(
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.chat.send.return_value = mock_response
+        mock_client.chat.send_async = AsyncMock(return_value=mock_response)
         mock_cls.return_value = mock_client
 
-        result = player.decide_action(game_state, valid_actions)
+        result = asyncio.run(player.decide_action(game_state, valid_actions))
 
     # Must be a tuple of length 2
     assert isinstance(result, tuple)
