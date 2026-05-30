@@ -706,157 +706,370 @@
     @media (max-width: 768px) {
       body {
         flex-direction: column;
-        padding: 0.5rem;
-        gap: 0.5rem;
+        padding: 0;
+        gap: 0;
+        padding-bottom: 48px; /* space for bottom sheet peek */
+        display: block;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
-      /* Status bar: grid layout for compact display */
+      /* Hide desktop-only content, keep status bar */
+      #main-content {
+        flex: none;
+      }
+      #table-and-review { display: none !important; }
+      #messages { display: none !important; }
+      #mobile-layout { display: flex !important; }
+
+      /* Compact status bar */
       #status-bar {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.3rem 0.8rem;
-        padding: 0.5rem 0.7rem;
-        font-size: 0.78rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3rem 0.7rem;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+        border-radius: 0;
       }
 
-      #status-bar a {
-        font-size: 0.78rem !important;
+      #status-bar a { display: none; }
+      #viewer-count-badge { display: none; }
+      /* Hide turn and current bet — shown inline in player list */
+      #status-bar div:nth-child(2),
+      #status-bar div:nth-child(4) { display: none; }
+
+      /* Bottom sheet */
+      #bottom-sheet {
+        display: flex !important;
       }
 
-      #viewer-count-badge {
-        margin-left: 0;
-        font-size: 0.78rem;
+      /* Hide desktop sidebar completely */
+      #sidebar { display: none !important; }
+      #sidebar-toggle { display: none !important; }
+      #sidebar-backdrop { display: none !important; }
+    }
+
+    /* Landscape on mobile — use max-height to catch landscape phones wider than 768px */
+    @media (max-height: 500px) and (orientation: landscape) {
+      #table-and-review { display: none !important; }
+      #mobile-layout { display: flex !important; flex-direction: row !important; gap: 0.5rem; padding: 0.3rem; }
+      #messages { display: none !important; }
+      #main-content { flex: none; }
+      #status-bar a { display: none; }
+      #viewer-count-badge { display: none; }
+
+      body {
+        display: block;
+        padding: 0;
+        padding-bottom: 0 !important;
+        overflow: hidden;
       }
 
-      /* Stack table and review vertically */
-      #table-and-review {
-        flex-direction: column;
+      #status-bar {
+        padding: 0.25rem 0.6rem;
+        font-size: 0.7rem;
+        border-radius: 0;
       }
 
-      #table-wrapper {
-        --seat-width: clamp(68px, 18cqw, 95px);
-        padding: clamp(55px, 16vw, 90px) clamp(50px, 14vw, 80px);
+      #mobile-community-section {
+        flex: 0 0 38%;
+        height: calc(100vh - 36px);
+        overflow-y: auto;
+        justify-content: center;
       }
 
-      /* Poker table fills width */
-      #poker-table {
-        width: 100%;
+      #mobile-players-list {
+        flex: 1;
+        height: calc(100vh - 36px);
+        overflow-y: auto;
       }
 
-      /* Seats: tighter sizing on mobile */
-      .seat {
-        min-width: 68px;
-        max-width: 95px;
-        padding: 0.2rem 0.3rem;
-        font-size: 0.6rem;
-        border-radius: 7px;
-      }
-
-      .seat-name {
-        font-size: 0.58rem;
-        max-width: 80px;
-      }
-
-      .seat-chips { font-size: 0.54rem; }
-      .seat-bet { font-size: 0.52rem; }
-      .seat-turn-label { font-size: 0.55rem; }
-
-      .seat-hole-cards .playing-card {
-        width: 24px;
-        height: 34px;
-        min-width: 24px;
+      .mobile-player-row {
+        padding: 0.25rem 0.4rem;
         min-height: 34px;
       }
 
-      .seat-hole-cards .playing-card .card-rank-tl,
-      .seat-hole-cards .playing-card .card-suit-br {
-        font-size: 0.4rem;
-      }
+      .mobile-player-name { font-size: 0.7rem; }
+      .mobile-player-chips { font-size: 0.6rem; }
+      .mobile-card-badge { font-size: 0.7rem; padding: 0.1rem 0.2rem; }
 
-      .seat-hole-cards .playing-card .face-band {
-        font-size: 0.55rem;
-        height: 12px;
-      }
-
-      .dealer-btn {
-        width: 16px;
-        height: 16px;
-        font-size: 0.5rem;
-        top: -8px;
-        right: -8px;
-      }
-
-      /* Community cards smaller */
-      #community-area .playing-card {
-        width: 36px;
-        height: 50px;
-        min-width: 36px;
-        min-height: 50px;
-      }
-
-      #community-area .playing-card .card-rank-tl,
-      #community-area .playing-card .card-suit-br {
-        font-size: 0.5rem;
-      }
-
-      #community-area .playing-card .face-band {
-        font-size: 0.7rem;
-        height: 18px;
-      }
-
-      #community-area .pot-display {
-        font-size: 0.72rem;
-      }
-
-      /* Live review panel: full width below table */
-      #live-review-panel {
-        flex: none;
-        width: 100%;
-        max-height: 250px;
-      }
-
-      /* Countdown overlay smaller */
-      #countdown-number { font-size: 2rem; }
-      #countdown-label { font-size: 0.7rem; }
-      #inter-hand-countdown { padding: 0.8rem 1.2rem; }
+      /* Hide bottom sheet in landscape */
+      #bottom-sheet { display: none !important; }
+      #sidebar { display: none !important; }
+      #sidebar-toggle { display: none !important; }
+      #sidebar-backdrop { display: none !important; }
     }
 
-    /* Extra-small screens (≤ 420px) — further compaction */
-    @media (max-width: 420px) {
-      #table-wrapper {
-        --seat-width: clamp(58px, 20cqw, 80px);
-        padding: clamp(45px, 18vw, 70px) clamp(35px, 12vw, 55px);
-      }
-
-      .seat {
-        min-width: 58px;
-        max-width: 80px;
-        padding: 0.15rem 0.25rem;
-      }
-
-      .seat-name { font-size: 0.5rem; max-width: 65px; }
-      .seat-chips { font-size: 0.48rem; }
-      .seat-bet { font-size: 0.46rem; }
-
-      .seat-hole-cards .playing-card {
-        width: 20px;
-        height: 28px;
-        min-width: 20px;
-        min-height: 28px;
-      }
-
-      #community-area .playing-card {
-        width: 30px;
-        height: 42px;
-        min-width: 30px;
-        min-height: 42px;
-      }
-
-      #status-bar {
-        grid-template-columns: 1fr;
-        font-size: 0.72rem;
-      }
+    /* ------------------------------------------------------------------ */
+    /* Mobile layout                                                        */
+    /* ------------------------------------------------------------------ */
+    #mobile-layout {
+      display: none;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.5rem;
     }
+
+    #mobile-community-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      background: #243824;
+      border-radius: 10px;
+      padding: 0.5rem 0.5rem;
+    }
+
+    #mobile-community-cards {
+      display: flex;
+      gap: 0.3rem;
+      justify-content: center;
+      flex-wrap: nowrap;
+    }
+
+    #mobile-community-cards .playing-card {
+      width: 38px;
+      height: 53px;
+      min-width: 38px;
+      min-height: 53px;
+    }
+
+    #mobile-community-cards .playing-card .card-rank-tl,
+    #mobile-community-cards .playing-card .card-suit-br {
+      font-size: 0.6rem;
+    }
+
+    #mobile-community-cards .playing-card .face-band {
+      font-size: 0.85rem;
+      height: 20px;
+    }
+
+    #mobile-pot-display {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #f0c040;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    #mobile-phase-info {
+      font-size: 0.7rem;
+      color: #aaa;
+    }
+
+    /* Mobile inter-hand countdown */
+    #mobile-countdown {
+      display: none;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #f0c040;
+      text-align: center;
+    }
+
+    #mobile-countdown.visible { display: block; }
+
+    /* Mobile player list */
+    #mobile-players-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .mobile-player-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(20, 40, 20, 0.88);
+      border: 1.5px solid #3a5a3a;
+      border-radius: 7px;
+      padding: 0.35rem 0.5rem;
+      min-height: 40px;
+      transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s;
+    }
+
+    .mobile-player-row.active-turn {
+      border-color: #f0c040;
+      box-shadow: 0 0 0 2px #f0c040, 0 0 12px rgba(240, 192, 64, 0.5);
+    }
+
+    .mobile-player-row.folded { opacity: 0.45; }
+
+    .mobile-player-row.winner {
+      border-color: #f0c040 !important;
+      box-shadow: 0 0 0 3px #f0c040, 0 0 18px rgba(240, 192, 64, 0.7) !important;
+    }
+
+    .mobile-player-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mobile-player-name {
+      font-weight: 700;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mobile-player-name .seat-plabel {
+      color: #f0c040;
+      font-size: 0.7rem;
+      margin-right: 0.15rem;
+    }
+
+    .mobile-player-chips {
+      font-size: 0.7rem;
+      color: #aaa;
+    }
+
+    .mobile-player-bet {
+      font-size: 0.7rem;
+      color: #f0c040;
+      font-weight: 600;
+    }
+
+    .mobile-player-cards {
+      display: flex;
+      gap: 0.2rem;
+      flex-shrink: 0;
+    }
+
+    .mobile-card-badge {
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 0.15rem 0.3rem;
+      border-radius: 4px;
+      background: #fff;
+      color: #111;
+      min-width: 28px;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .mobile-card-badge.red { color: #cc2222; }
+
+    .mobile-player-dealer {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #f0c040;
+      color: #1a2e1a;
+      font-size: 0.6rem;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .mobile-player-thinking {
+      font-size: 0.65rem;
+      color: #f0c040;
+      font-weight: 600;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Bottom sheet                                                         */
+    /* ------------------------------------------------------------------ */
+    #bottom-sheet {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 900;
+      background: #1c2e1c;
+      border-top: 1px solid #3a5a3a;
+      border-radius: 16px 16px 0 0;
+      flex-direction: column;
+      height: 55vh;
+      transition: transform 0.25s ease;
+    }
+
+    #bottom-sheet.collapsed {
+      transform: translateY(calc(100% - 48px));
+    }
+
+    #bottom-sheet.half {
+      transform: translateY(calc(100% - 200px));
+    }
+
+    #bottom-sheet.full {
+      transform: translateY(0);
+    }
+
+    #bottom-sheet-handle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.4rem 1rem;
+      cursor: grab;
+      flex-shrink: 0;
+      min-height: 48px;
+      justify-content: center;
+    }
+
+    #bottom-sheet-handle::before {
+      content: '';
+      width: 36px;
+      height: 4px;
+      background: #555;
+      border-radius: 2px;
+      margin-bottom: 0.4rem;
+    }
+
+    #bottom-sheet-peek {
+      font-size: 0.75rem;
+      color: #ccc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+
+    #bottom-sheet-tabs {
+      display: flex;
+      border-bottom: 1px solid #3a5a3a;
+      flex-shrink: 0;
+    }
+
+    .bottom-sheet-tab {
+      flex: 1;
+      padding: 0.5rem 0;
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+
+    .bottom-sheet-tab.active {
+      color: #f0c040;
+      border-bottom-color: #f0c040;
+    }
+
+    #bottom-sheet-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem 0.75rem;
+    }
+
+    #bottom-sheet-log .log-entry {
+      font-size: 0.75rem;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid #2a3e2a;
+      color: #ccc;
+    }
+
+    #bottom-sheet-review .live-review-entry {
+      padding: 0.4rem 0;
+      border-bottom: 1px solid #2a3e2a;
+    }
+
+    #bottom-sheet-review .live-review-player { font-size: 0.78rem; }
+    #bottom-sheet-review .live-review-reasoning { font-size: 0.75rem; }
   </style>
 </head>
 <body>
@@ -904,7 +1117,33 @@
 
   </div><!-- /#main-content -->
 
-  <!-- Sidebar: Log -->
+  <!-- Mobile layout (hidden on desktop, shown on ≤768px) -->
+  <div id="mobile-layout">
+    <div id="mobile-community-section">
+      <div id="mobile-phase-info">—</div>
+      <div id="mobile-community-cards"></div>
+      <div id="mobile-pot-display">Pot: 0</div>
+      <div id="mobile-countdown"></div>
+    </div>
+    <div id="mobile-players-list"></div>
+  </div>
+
+  <!-- Bottom sheet (mobile only) -->
+  <div id="bottom-sheet" class="collapsed">
+    <div id="bottom-sheet-handle">
+      <div id="bottom-sheet-peek">Tap to view log</div>
+    </div>
+    <div id="bottom-sheet-tabs">
+      <button class="bottom-sheet-tab active" data-tab="review">AI Reasoning</button>
+      <button class="bottom-sheet-tab" data-tab="log">Log</button>
+    </div>
+    <div id="bottom-sheet-content">
+      <div id="bottom-sheet-review"></div>
+      <div id="bottom-sheet-log" class="hidden"></div>
+    </div>
+  </div>
+
+  <!-- Sidebar: Log (desktop only) -->
   <div id="sidebar">
     <div class="tab-bar">
       <button class="tab-btn active" id="tab-log">Log</button>
@@ -915,14 +1154,14 @@
     </div>
   </div>
 
-  <!-- Mobile sidebar toggle + backdrop -->
+  <!-- Mobile sidebar toggle + backdrop (tablet 769-1280px) -->
   <button id="sidebar-toggle" aria-label="Toggle log panel">📋</button>
   <div id="sidebar-backdrop"></div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="/static/arena.js"></script>
   <script>
-    // Mobile sidebar drawer toggle
+    // Mobile sidebar drawer toggle (tablet 769-1280px)
     (function() {
       var toggle = document.getElementById('sidebar-toggle');
       var sidebar = document.getElementById('sidebar');
@@ -944,6 +1183,60 @@
       });
 
       backdrop.addEventListener('click', closeSidebar);
+    })();
+
+    // Bottom sheet logic (mobile)
+    (function() {
+      var sheet = document.getElementById('bottom-sheet');
+      var handle = document.getElementById('bottom-sheet-handle');
+      var tabs = document.querySelectorAll('.bottom-sheet-tab');
+      var reviewPanel = document.getElementById('bottom-sheet-review');
+      var logPanel = document.getElementById('bottom-sheet-log');
+      var states = ['collapsed', 'half', 'full'];
+      var paddings = [48, 200, 0]; // body padding-bottom for each state
+      var currentState = 0;
+
+      function applyState() {
+        sheet.className = states[currentState];
+        // Adjust body padding so content is scrollable above the sheet
+        document.body.style.paddingBottom = paddings[currentState] + 'px';
+      }
+
+      handle.addEventListener('click', function() {
+        currentState = (currentState + 1) % states.length;
+        applyState();
+      });
+
+      // Swipe up/down on handle
+      var startY = 0;
+      handle.addEventListener('touchstart', function(e) {
+        startY = e.touches[0].clientY;
+      }, { passive: true });
+
+      handle.addEventListener('touchend', function(e) {
+        var dy = e.changedTouches[0].clientY - startY;
+        if (dy < -30 && currentState < 2) {
+          currentState++;
+        } else if (dy > 30 && currentState > 0) {
+          currentState--;
+        }
+        applyState();
+      });
+
+      // Tab switching
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          tabs.forEach(function(t) { t.classList.remove('active'); });
+          tab.classList.add('active');
+          if (tab.dataset.tab === 'review') {
+            reviewPanel.classList.remove('hidden');
+            logPanel.classList.add('hidden');
+          } else {
+            logPanel.classList.remove('hidden');
+            reviewPanel.classList.add('hidden');
+          }
+        });
+      });
     })();
   </script>
 </body>
