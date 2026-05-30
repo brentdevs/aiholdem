@@ -264,7 +264,7 @@ const ActionLog = {
     return `${hh}:${mm}`;
   },
 
-  append(text, cssClass) {
+  append(text, cssClass, tooltip) {
     const list = document.getElementById("log-list");
     if (!list) return;
 
@@ -273,22 +273,41 @@ const ActionLog = {
     const entry = document.createElement("div");
     entry.className = "log-entry" + (cssClass ? " " + cssClass : "");
     entry.textContent = `[${this._timestamp()}] ${text}`;
+    if (tooltip) entry.dataset.tip = tooltip;
     list.appendChild(entry);
+
+    if (list.children.length > 500) list.removeChild(list.firstChild);
 
     if (atBottom) list.scrollTop = list.scrollHeight;
   },
 
-  onGameState(state) {
+  onGameState(state, moveLogs) {
     const history = state.hand_history || [];
     if (history.length < this._lastHistoryLen) this._lastHistoryLen = 0;
     const newEntries = history.slice(this._lastHistoryLen);
     this._lastHistoryLen = history.length;
 
+    // Build a lookup: index move logs by "name|action|amount" with occurrence count
+    const reasoningMap = {};
+    for (const l of moveLogs) {
+      const key = `${l.player_name}|${l.action}|${l.amount}`;
+      if (!reasoningMap[key]) reasoningMap[key] = [];
+      reasoningMap[key].push(l.reasoning);
+    }
+    const usedCounts = {};
+
     for (const entry of newEntries) {
       const [, name, code, amount] = entry;
       const verb = this._ACTION_LABELS[code] || code;
       const amountStr = amount != null ? ` ${amount}` : '';
-      this.append(`${name} ${verb}${amountStr}`);
+      // Map history action codes to move_log action values
+      const actionMap = { F: 'fold', X: 'check', C: 'call', R: 'raise', A: 'all_in' };
+      const actionVal = actionMap[code] || code;
+      const key = `${name}|${actionVal}|${amount}`;
+      const idx = usedCounts[key] || 0;
+      usedCounts[key] = idx + 1;
+      const reasoning = reasoningMap[key] && reasoningMap[key][idx] || null;
+      this.append(`${name} ${verb}${amountStr}`, null, reasoning);
     }
 
     if (state.phase !== undefined && state.phase !== this._lastPhase) {
@@ -442,7 +461,7 @@ const InterHandCountdown = {
 // render — same structure as game.js but no action panel or lobby controls
 // ---------------------------------------------------------------------------
 function render(state) {
-  ActionLog.onGameState(state);
+  ActionLog.onGameState(state, state.live_move_logs || []);
 
   buildPlayerLabelMap(state.players || []);
 
