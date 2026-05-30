@@ -62,9 +62,9 @@ def _derive_ollama_display_name(model: str) -> str:
 
 
 def _create_ollama_client(api_key: str):
-    from ollama import Client
+    from ollama import AsyncClient
 
-    return Client(
+    return AsyncClient(
         host=OLLAMA_CLOUD_HOST,
         headers={"Authorization": f"Bearer {api_key}"},
     )
@@ -88,7 +88,9 @@ class OllamaCloudPlayer(AIPlayer):
         self.game_api_failures: int = 0
         self.game_total_latency_ms: int = 0
 
-    def decide_action(self, game_state: dict, valid_actions: list[Action]) -> tuple[Action, str]:
+    async def decide_action(
+        self, game_state: dict, valid_actions: list[Action]
+    ) -> tuple[Action, str]:
         session_id = game_state.get("session_id", "unknown")
         min_raise = game_state.get("min_raise", 0)
         history: list[tuple[str, str, str, int | None]] = game_state.get("hand_history", [])
@@ -150,17 +152,19 @@ class OllamaCloudPlayer(AIPlayer):
             if not api_key:
                 raise RuntimeError("OLLAMA_API_KEY is not configured")
 
-            import eventlet
+            import asyncio
 
             call_start = time.monotonic()
-            with eventlet.Timeout(20, TimeoutError):
-                client = _create_ollama_client(api_key)
-                response = client.chat(
+            client = _create_ollama_client(api_key)
+            response = await asyncio.wait_for(
+                client.chat(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
                     stream=False,
                     think=False,
-                )
+                ),
+                timeout=20,
+            )
             call_elapsed_ms = int((time.monotonic() - call_start) * 1000)
             self.game_total_latency_ms += call_elapsed_ms
 

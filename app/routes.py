@@ -2,7 +2,7 @@
 
 import logging
 
-from flask import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
+from quart import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
 
 from app.ai.model_config import get_supported_model_configs
 from app.arena.arena_manager import ARENA_PLAYER_CONFIGS
@@ -28,23 +28,23 @@ FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 
 
 @bp.route("/favicon.svg")
-def favicon():
+async def favicon():
     return Response(FAVICON_SVG, mimetype="image/svg+xml")
 
 
 @bp.route("/")
-def index():
+async def index():
     return redirect(url_for("main.arena"))
 
 
 @bp.route("/arena")
-def arena():
-    return render_template("arena.html")
+async def arena():
+    return await render_template("arena.html")
 
 
 @bp.route("/faq")
-def faq():
-    return render_template(
+async def faq():
+    return await render_template(
         "faq.html",
         arena_players=ARENA_PLAYER_CONFIGS,
         arena_player_count=len(ARENA_PLAYER_CONFIGS),
@@ -52,12 +52,12 @@ def faq():
 
 
 @bp.route("/leaderboard")
-def leaderboard():
-    return render_template("leaderboard.html")
+async def leaderboard():
+    return await render_template("leaderboard.html")
 
 
 @bp.route("/api/leaderboard")
-def api_leaderboard():
+async def api_leaderboard():
     service = current_app.leaderboard_service
     if not service.available:
         return jsonify({"error": "Leaderboard unavailable"}), 503
@@ -65,7 +65,7 @@ def api_leaderboard():
 
 
 @bp.route("/models")
-def get_models():
+async def get_models():
     supported_configs = get_supported_model_configs()
     supported = [config.as_dict() for config in supported_configs]
     arena_players = [config.as_dict() for config in ARENA_PLAYER_CONFIGS]

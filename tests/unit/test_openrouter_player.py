@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -46,7 +46,7 @@ def _mock_client(response_text: str):
     mock_client = MagicMock()
     mock_client.__enter__ = MagicMock(return_value=mock_client)
     mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.chat.send.return_value = mock_response
+    mock_client.chat.send_async = AsyncMock(return_value=mock_response)
     return mock_client
 
 
@@ -346,7 +346,8 @@ def test_parse_json_response_raise_converts_to_all_in_when_total_exceeds_stack_p
 # ---------------------------------------------------------------------------
 
 
-def test_decide_action_uses_correct_model():
+@pytest.mark.asyncio
+async def test_decide_action_uses_correct_model():
     player = _make_player(model=SUPPORTED_MODELS[2])
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
@@ -354,20 +355,21 @@ def test_decide_action_uses_correct_model():
     with patch("app.ai.openrouter_player.OpenRouter") as mock_cls:
         mock_client = _mock_client("check")
         mock_cls.return_value = mock_client
-        player.decide_action(game_state, valid)
-        mock_client.chat.send.assert_called_once()
-        call_kwargs = mock_client.chat.send.call_args.kwargs
+        await player.decide_action(game_state, valid)
+        mock_client.chat.send_async.assert_called_once()
+        call_kwargs = mock_client.chat.send_async.call_args.kwargs
         assert call_kwargs.get("models") == [SUPPORTED_MODELS[2]]
 
 
-def test_decide_action_returns_parsed_action():
+@pytest.mark.asyncio
+async def test_decide_action_returns_parsed_action():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
 
     with patch("app.ai.openrouter_player.OpenRouter") as mock_cls:
         mock_cls.return_value = _mock_client("check")
-        result, reasoning = player.decide_action(game_state, valid)
+        result, reasoning = await player.decide_action(game_state, valid)
 
     assert result.type == ActionType.CHECK
 
@@ -377,7 +379,8 @@ def test_decide_action_returns_parsed_action():
 # ---------------------------------------------------------------------------
 
 
-def test_decide_action_check_on_exception_when_available():
+@pytest.mark.asyncio
+async def test_decide_action_check_on_exception_when_available():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
@@ -386,14 +389,15 @@ def test_decide_action_check_on_exception_when_available():
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.chat.send.side_effect = Exception("API down")
+        mock_client.chat.send_async.side_effect = Exception("API down")
         mock_cls.return_value = mock_client
-        result, reasoning = player.decide_action(game_state, valid)
+        result, reasoning = await player.decide_action(game_state, valid)
 
     assert result.type == ActionType.CHECK
 
 
-def test_decide_action_fold_on_exception_no_check():
+@pytest.mark.asyncio
+async def test_decide_action_fold_on_exception_no_check():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD)]
@@ -402,33 +406,35 @@ def test_decide_action_fold_on_exception_no_check():
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.chat.send.side_effect = Exception("API down")
+        mock_client.chat.send_async.side_effect = Exception("API down")
         mock_cls.return_value = mock_client
-        result, reasoning = player.decide_action(game_state, valid)
+        result, reasoning = await player.decide_action(game_state, valid)
 
     assert result.type == ActionType.FOLD
 
 
-def test_decide_action_check_on_unparseable():
+@pytest.mark.asyncio
+async def test_decide_action_check_on_unparseable():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
 
     with patch("app.ai.openrouter_player.OpenRouter") as mock_cls:
         mock_cls.return_value = _mock_client("I have no idea what to do here")
-        result, reasoning = player.decide_action(game_state, valid)
+        result, reasoning = await player.decide_action(game_state, valid)
 
     assert result.type == ActionType.CHECK
 
 
-def test_decide_action_fold_on_unparseable_no_check():
+@pytest.mark.asyncio
+async def test_decide_action_fold_on_unparseable_no_check():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD)]  # no check available
 
     with patch("app.ai.openrouter_player.OpenRouter") as mock_cls:
         mock_cls.return_value = _mock_client("I have no idea what to do here")
-        result, reasoning = player.decide_action(game_state, valid)
+        result, reasoning = await player.decide_action(game_state, valid)
 
     assert result.type == ActionType.FOLD
 
@@ -438,20 +444,22 @@ def test_decide_action_fold_on_unparseable_no_check():
 # ---------------------------------------------------------------------------
 
 
-def test_decide_action_returns_tuple():
+@pytest.mark.asyncio
+async def test_decide_action_returns_tuple():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
 
     with patch("app.ai.openrouter_player.OpenRouter") as mock_cls:
         mock_cls.return_value = _mock_client("check")
-        result = player.decide_action(game_state, valid)
+        result = await player.decide_action(game_state, valid)
 
     assert isinstance(result, tuple)
     assert len(result) == 2
 
 
-def test_decide_action_error_fallback_reasoning():
+@pytest.mark.asyncio
+async def test_decide_action_error_fallback_reasoning():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
@@ -460,14 +468,15 @@ def test_decide_action_error_fallback_reasoning():
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=False)
-        mock_client.chat.send.side_effect = Exception("API down")
+        mock_client.chat.send_async.side_effect = Exception("API down")
         mock_cls.return_value = mock_client
-        _, reasoning = player.decide_action(game_state, valid)
+        _, reasoning = await player.decide_action(game_state, valid)
 
     assert reasoning == "API error \u2014 defaulted to check/fold"
 
 
-def test_llm_called_once_per_decide_action():
+@pytest.mark.asyncio
+async def test_llm_called_once_per_decide_action():
     player = _make_player()
     game_state = _base_game_state()
     valid = [Action(type=ActionType.FOLD), Action(type=ActionType.CHECK)]
@@ -475,6 +484,6 @@ def test_llm_called_once_per_decide_action():
     with patch("app.ai.openrouter_player.OpenRouter") as mock_cls:
         mock_client = _mock_client("check")
         mock_cls.return_value = mock_client
-        player.decide_action(game_state, valid)
+        await player.decide_action(game_state, valid)
 
-    assert mock_client.chat.send.call_count == 1
+    assert mock_client.chat.send_async.call_count == 1
