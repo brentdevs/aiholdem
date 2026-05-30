@@ -510,7 +510,173 @@ function render(state) {
   }
 
   renderSeats(state);
+  MobileRenderer.render(state);
 }
+
+// ---------------------------------------------------------------------------
+// MobileRenderer — stacked list layout for ≤768px screens
+// ---------------------------------------------------------------------------
+const MobileRenderer = {
+  _mobileQuery: window.matchMedia("(max-width: 768px)"),
+  _landscapeQuery: window.matchMedia("(max-height: 500px) and (orientation: landscape)"),
+
+  _isMobile() {
+    return this._mobileQuery.matches || this._landscapeQuery.matches;
+  },
+
+  render(state) {
+    if (!this._isMobile()) return;
+
+    this._renderCommunity(state);
+    this._renderPlayers(state);
+    this._renderCountdown(state);
+    this._updateBottomSheet(state);
+  },
+
+  _renderCommunity(state) {
+    const ccEl = document.getElementById("mobile-community-cards");
+    if (!ccEl) return;
+    ccEl.innerHTML = "";
+    (state.community_cards || []).forEach(c => ccEl.appendChild(makeCardEl(c)));
+
+    const potEl = document.getElementById("mobile-pot-display");
+    if (potEl) potEl.textContent = "Pot: " + (state.pot ?? 0);
+
+    const phaseEl = document.getElementById("mobile-phase-info");
+    if (phaseEl) {
+      const phase = state.phase || state.status || "—";
+      const blinds = state.blinds ? ` • ${state.blinds[0]}/${state.blinds[1]}` : "";
+      const bet = state.current_bet ? ` • Bet: ${state.current_bet}` : "";
+      phaseEl.textContent = phase.charAt(0).toUpperCase() + phase.slice(1).replace(/_/g, " ") + blinds + bet;
+    }
+  },
+
+  _renderPlayers(state) {
+    const listEl = document.getElementById("mobile-players-list");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+
+    const players = state.players || [];
+    let winnerPlayerId = null;
+    if (state.showdown_pending && state.showdown_results && state.showdown_results.length > 0) {
+      winnerPlayerId = state.showdown_results[0].player_id;
+    }
+
+    players.forEach((p, i) => {
+      const isDealer = state.dealer_button !== undefined && i === state.dealer_button;
+      const isWinner = winnerPlayerId !== null && p.player_id === winnerPlayerId;
+
+      const row = document.createElement("div");
+      row.className = "mobile-player-row" +
+        (p.is_turn ? " active-turn" : "") +
+        (!p.is_active ? " folded" : "") +
+        (isWinner ? " winner" : "");
+
+      let html = "";
+
+      // Dealer button
+      if (isDealer) {
+        html += `<div class="mobile-player-dealer">D</div>`;
+      }
+
+      // Player info
+      html += `<div class="mobile-player-info">`;
+      html += `<div class="mobile-player-name"><span class="seat-plabel">P${i+1}:</span> ${escHtml(p.name)}</div>`;
+      html += `<div class="mobile-player-chips">${p.chips} chips`;
+      if (p.current_bet) html += ` <span class="mobile-player-bet">• Bet: ${p.current_bet}</span>`;
+      html += `</div>`;
+      if (p.is_turn) html += `<div class="mobile-player-thinking">🤖 Thinking…</div>`;
+      html += `</div>`;
+
+      // Hole cards as text badges
+      const cards = p.hole_cards || [];
+      if (cards.length) {
+        html += `<div class="mobile-player-cards">`;
+        cards.forEach(c => {
+          const rank = c.rank || c.Rank;
+          const suit = c.suit || c.Suit;
+          if (rank && suit) {
+            const isRed = suit === "H" || suit === "D";
+            const suitSym = SUIT_SYMBOLS[suit] || suit;
+            html += `<span class="mobile-card-badge${isRed ? ' red' : ''}">${rankLabel(rank)}${suitSym}</span>`;
+          } else {
+            html += `<span class="mobile-card-badge" style="background:#1a3a6e;color:#fff;">?</span>`;
+          }
+        });
+        html += `</div>`;
+      }
+
+      row.innerHTML = html;
+      listEl.appendChild(row);
+    });
+  },
+
+  _renderCountdown(state) {
+    const el = document.getElementById("mobile-countdown");
+    if (!el) return;
+    if (state.inter_hand_ends_at) {
+      el.classList.add("visible");
+      const remaining = Math.max(0, state.inter_hand_ends_at - Date.now() / 1000);
+      el.textContent = `Next hand in ${Math.ceil(remaining)}s`;
+    } else {
+      el.classList.remove("visible");
+    }
+  },
+
+  _updateBottomSheet(state) {
+    // Update peek text with last action
+    const peek = document.getElementById("bottom-sheet-peek");
+    if (!peek) return;
+    const history = state.hand_history || [];
+    if (history.length > 0) {
+      const last = history[history.length - 1];
+      const [, name, code, amount] = last;
+      const ACTION_LABELS = { F: 'folded', X: 'checked', C: 'called', R: 'raised', A: 'all-in' };
+      const verb = ACTION_LABELS[code] || code;
+      peek.textContent = `${name} ${verb}${amount != null ? ' ' + amount : ''}`;
+    }
+
+    // Update bottom sheet review tab — newest at top
+    const reviewEl = document.getElementById("bottom-sheet-review");
+    if (reviewEl) {
+      const logs = state.live_move_logs || [];
+      reviewEl.innerHTML = "";
+      for (let i = logs.length - 1; i >= Math.max(0, logs.length - 20); i--) {
+        const log = logs[i];
+        const phase = (log.phase || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+        const actionStr = log.amount != null ? `${log.action} ${log.amount}` : log.action;
+        let reasoning = log.reasoning || "";
+        if (reasoning.length > 300) reasoning = reasoning.slice(0, 300) + "…";
+        reasoning = expandPlayerLabels(reasoning);
+        const entry = document.createElement("div");
+        entry.className = "live-review-entry";
+        entry.innerHTML = `
+          <div class="live-review-entry-header">
+            <span class="live-review-player">${escHtml(log.player_name)}</span>
+            <span class="live-review-phase">${escHtml(phase)}</span>
+            <span class="live-review-action">${escHtml(actionStr)}</span>
+          </div>
+          <div class="live-review-reasoning">${colorSuits(escHtml(reasoning))}</div>
+        `;
+        reviewEl.appendChild(entry);
+      }
+    }
+
+    // Update bottom sheet log tab — newest at top
+    const logEl = document.getElementById("bottom-sheet-log");
+    if (logEl) {
+      const logList = document.getElementById("log-list");
+      if (logList) {
+        const entries = logList.querySelectorAll(".log-entry");
+        logEl.innerHTML = "";
+        for (let i = entries.length - 1; i >= Math.max(0, entries.length - 50); i--) {
+          const clone = entries[i].cloneNode(true);
+          logEl.appendChild(clone);
+        }
+      }
+    }
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Utility
