@@ -264,6 +264,12 @@ const ActionLog = {
     return `${hh}:${mm}`;
   },
 
+  // Set while the pointer is hovering the log so a reasoning tooltip can be read
+  // without the line sliding out from under the cursor. While paused we neither
+  // auto-scroll nor trim old entries (which would shift the hovered line); both
+  // resume when the pointer leaves (see setupLogTooltip).
+  _scrollPaused: false,
+
   append(text, cssClass, tooltip) {
     const list = document.getElementById("log-list");
     if (!list) return;
@@ -276,9 +282,18 @@ const ActionLog = {
     if (tooltip) entry.dataset.tip = tooltip;
     list.appendChild(entry);
 
-    if (list.children.length > 500) list.removeChild(list.firstChild);
+    if (!this._scrollPaused && list.children.length > 500) list.removeChild(list.firstChild);
 
-    if (atBottom) list.scrollTop = list.scrollHeight;
+    if (atBottom && !this._scrollPaused) list.scrollTop = list.scrollHeight;
+  },
+
+  // Called when the pointer leaves the log: enforce the 500-entry cap that was
+  // deferred while paused, then snap to the newest entry to catch up.
+  resumeScroll() {
+    const list = document.getElementById("log-list");
+    if (!list) return;
+    while (list.children.length > 500) list.removeChild(list.firstChild);
+    list.scrollTop = list.scrollHeight;
   },
 
   onGameState(state, moveLogs) {
@@ -695,4 +710,87 @@ function colorSuits(escapedStr) {
   return escapedStr
     .replace(/([♥♦])/g, '<span style="color:#e05050">$1</span>')
     .replace(/([♠♣])/g, '<span style="color:#b0c8b0">$1</span>');
+}
+
+// ---------------------------------------------------------------------------
+// Reasoning tooltip for the action log.
+//
+// The tooltip is a single document-level element (position:fixed) rather than a
+// CSS ::after on the entry, so it is never clipped by #log-list's scroll
+// overflow — previously it was clipped at the top of the list, and the earlier
+// fix that moved it below the entry just moved the clipping to the bottom.
+// JS positions it below the hovered entry, flipping above when there isn't room.
+//
+// While the pointer is over the log we also pause auto-scroll/trimming so the
+// hovered line (and its tooltip) doesn't slide away as new entries arrive.
+// ---------------------------------------------------------------------------
+function setupLogTooltip() {
+  const list = document.getElementById("log-list");
+  if (!list) return;
+
+  const tip = document.createElement("div");
+  tip.id = "log-tooltip";
+  document.body.appendChild(tip);
+
+  let current = null; // the .log-entry the tooltip is currently anchored to
+
+  function position() {
+    if (!current || !document.body.contains(current)) { hide(); return; }
+    const rect = current.getBoundingClientRect();
+    const gap = 6;
+    const tipRect = tip.getBoundingClientRect();
+
+    // Prefer below the entry; flip above if it would overflow the viewport.
+    let top = rect.bottom + gap;
+    if (top + tipRect.height > window.innerHeight && rect.top - gap - tipRect.height >= 0) {
+      top = rect.top - gap - tipRect.height;
+    }
+    // Clamp horizontally so the tooltip stays within the viewport.
+    let left = rect.left;
+    const maxLeft = window.innerWidth - tipRect.width - gap;
+    if (left > maxLeft) left = Math.max(gap, maxLeft);
+
+    tip.style.top = top + "px";
+    tip.style.left = left + "px";
+  }
+
+  function show(entry) {
+    current = entry;
+    tip.textContent = entry.dataset.tip;
+    tip.style.display = "block";
+    position();
+  }
+
+  function hide() {
+    current = null;
+    tip.style.display = "none";
+  }
+
+  list.addEventListener("mouseover", (e) => {
+    const entry = e.target.closest(".log-entry[data-tip]");
+    if (entry && entry !== current) show(entry);
+  });
+
+  list.addEventListener("mouseout", (e) => {
+    // Hide only when the pointer actually leaves the anchored entry.
+    if (current && !current.contains(e.relatedTarget)) hide();
+  });
+
+  // Pause auto-scroll while reading; snap to newest entry on leave.
+  list.addEventListener("mouseenter", () => { ActionLog._scrollPaused = true; });
+  list.addEventListener("mouseleave", () => {
+    ActionLog._scrollPaused = false;
+    hide();
+    ActionLog.resumeScroll();
+  });
+
+  // Keep the tooltip glued to its entry if the list scrolls under the pointer.
+  list.addEventListener("scroll", position);
+  window.addEventListener("resize", () => { if (current) position(); });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupLogTooltip);
+} else {
+  setupLogTooltip();
 }

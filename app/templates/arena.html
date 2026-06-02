@@ -95,15 +95,14 @@
 
     .log-entry[data-tip] {
       cursor: help;
-      position: relative;
     }
 
-    .log-entry[data-tip]:hover::after {
-      content: attr(data-tip);
-      position: absolute;
-      left: 0;
-      top: 100%;
-      z-index: 100;
+    /* Reasoning tooltip. Rendered at the document level with position:fixed and
+       positioned by JS (see setupLogTooltip in arena.js) so it can't be clipped
+       by the scrolling #log-list container at either the top or bottom. */
+    #log-tooltip {
+      position: fixed;
+      z-index: 1000;
       background: #1a1a1a;
       color: #e8e8e8;
       padding: 0.5rem 0.7rem;
@@ -114,6 +113,7 @@
       word-break: break-word;
       box-shadow: 0 2px 8px rgba(0,0,0,0.7);
       pointer-events: none;
+      display: none;
     }
 
     .log-entry.log-phase {
