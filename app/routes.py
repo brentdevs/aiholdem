@@ -2,7 +2,16 @@
 
 import logging
 
-from quart import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
+from quart import (
+    Blueprint,
+    Response,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from app.ai.model_config import get_supported_model_configs
 from app.arena.arena_manager import ARENA_PLAYER_CONFIGS
@@ -62,6 +71,49 @@ async def api_leaderboard():
     if not service.available:
         return jsonify({"error": "Leaderboard unavailable"}), 503
     return jsonify(service.get_leaderboard())
+
+
+@bp.route("/model/<path:model_id>")
+async def model_detail(model_id: str):
+    return await render_template("model_detail.html", model_id=model_id)
+
+
+@bp.route("/api/model/<path:model_id>/summary")
+async def api_model_summary(model_id: str):
+    service = current_app.profiling_service
+    if not service.available:
+        return jsonify({"error": "Profiling unavailable"}), 503
+    summary = service.get_model_summary(model_id)
+    if not summary:
+        return jsonify({"error": "No data for model"}), 404
+    return jsonify(summary)
+
+
+@bp.route("/api/model/<path:model_id>/daily")
+async def api_model_daily(model_id: str):
+    service = current_app.profiling_service
+    if not service.available:
+        return jsonify({"error": "Profiling unavailable"}), 503
+    days = int(request.args.get("days", "30"))
+    return jsonify(service.get_model_daily_stats(model_id, days=days))
+
+
+@bp.route("/api/model/<path:model_id>/style")
+async def api_model_style(model_id: str):
+    service = current_app.profiling_service
+    if not service.available:
+        return jsonify({"error": "Profiling unavailable"}), 503
+    buckets = int(request.args.get("buckets", "10"))
+    return jsonify(service.get_model_style_trends(model_id, buckets=buckets))
+
+
+@bp.route("/api/model/<path:model_id>/hands")
+async def api_model_hands(model_id: str):
+    service = current_app.profiling_service
+    if not service.available:
+        return jsonify({"error": "Profiling unavailable"}), 503
+    limit = int(request.args.get("limit", "20"))
+    return jsonify(service.get_model_recent_hands(model_id, limit=limit))
 
 
 @bp.route("/models")

@@ -378,6 +378,23 @@ class ArenaManager:
                     game_id=self.session.profiling_game_id,
                     player_results=player_results,
                 )
+
+                # Record per-game per-model API stats for historical charts
+                model_stats = [
+                    {
+                        "model_id": p.model,
+                        "api_calls": p.game_api_calls,
+                        "api_failures": p.game_api_failures,
+                        "latency_ms": p.game_total_latency_ms,
+                        "finish_pos": placings.get(p.player_id, len(self.session.players)),
+                    }
+                    for p in self.session.players
+                    if isinstance(p, AIPlayer) and hasattr(p, "model")
+                ]
+                self.profiling_service.record_game_model_stats(
+                    game_id=self.session.profiling_game_id,
+                    model_stats=model_stats,
+                )
             except Exception as exc:
                 logger.error("Failed to record arena game end: %s", exc)
 

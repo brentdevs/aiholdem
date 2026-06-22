@@ -139,6 +139,10 @@
 
     .model-name { font-weight: 600; }
 
+    .model-name a { color: inherit; text-decoration: none; }
+
+    .model-name a:hover { color: #f0c040; text-decoration: underline; }
+
     .num { text-align: right; }
 
     thead th.num { text-align: right; }
@@ -277,7 +281,7 @@
 
         tr.innerHTML =
           '<td class="rank-cell">' + (i + 1) + '</td>' +
-          '<td class="model-name">' + escapeHtml(entry.display_name) + '</td>' +
+          '<td class="model-name"><a href="/model/' + encodeURIComponent(entry.model_id) + '">' + escapeHtml(entry.display_name) + '</a></td>' +
           '<td class="num">' + entry.games_played + '</td>' +
           '<td class="num">' + entry.wins + '</td>' +
           '<td class="num">' + (winPct !== '—' ? winPct + '%' : '—') + '</td>' +

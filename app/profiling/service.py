@@ -146,6 +146,29 @@ class ProfilingService:
                             occurred_at     TIMESTAMPTZ DEFAULT NOW()
                         );
                     """)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS game_model_stats (
+                            game_id         TEXT REFERENCES games(game_id),
+                            model_id        TEXT,
+                            api_calls       INTEGER NOT NULL DEFAULT 0,
+                            api_failures    INTEGER NOT NULL DEFAULT 0,
+                            latency_ms      BIGINT  NOT NULL DEFAULT 0,
+                            finish_pos      INTEGER NOT NULL DEFAULT 0,
+                            PRIMARY KEY (game_id, model_id)
+                        );
+                    """)
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_games_started_at ON games (started_at);"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_hands_played_at ON hands (played_at);"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_errors_occurred_at ON errors (occurred_at);"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_gms_model_id ON game_model_stats (model_id);"
+                    )
                 conn.commit()
             finally:
                 self._pool.putconn(conn)
@@ -366,6 +389,47 @@ class ProfilingService:
         except Exception as e:
             logger.error("Unexpected error recording game end %s: %s", game_id, e)
 
+    def record_game_model_stats(self, game_id: str, model_stats: list[dict]) -> None:
+        """Insert per-game per-model API stats rows.
+
+        model_stats: list of dicts with keys model_id, api_calls, api_failures,
+        latency_ms, finish_pos.
+        """
+        if not self._available:
+            return
+        try:
+            conn = self._pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    for ms in model_stats:
+                        cur.execute(
+                            """
+                            INSERT INTO game_model_stats
+                                (game_id, model_id, api_calls, api_failures,
+                                 latency_ms, finish_pos)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (game_id, model_id) DO NOTHING;
+                            """,
+                            (
+                                game_id,
+                                ms.get("model_id", ""),
+                                ms.get("api_calls", 0),
+                                ms.get("api_failures", 0),
+                                ms.get("latency_ms", 0),
+                                ms.get("finish_pos", 0),
+                            ),
+                        )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.error("Failed to record game model stats %s: %s", game_id, e)
+        except Exception as e:
+            logger.error("Unexpected error recording game model stats %s: %s", game_id, e)
+
     # ------------------------------------------------------------------ #
     #  Profile generation                                                  #
     # ------------------------------------------------------------------ #
@@ -421,3 +485,262 @@ class ProfilingService:
         except Exception as e:
             logger.warning("Unexpected error generating profiles: %s", e)
             return ""
+
+    # ------------------------------------------------------------------ #
+    #  Historical stats queries (for per-model detail page)              #
+    # ------------------------------------------------------------------ #
+
+    def get_model_daily_stats(self, model_id: str, days: int = 30) -> list[dict]:
+        """Return daily aggregates for a model over the last N days.
+
+        Each row: {date, games, wins, avg_finish, net_profit, errors,
+                   api_calls, api_failures, avg_latency_ms}
+        """
+        if not self._available:
+            return []
+        try:
+            conn = self._pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        WITH gms AS (
+                            SELECT
+                                date_trunc('day', g.started_at) AS day,
+                                COUNT(*)                       AS games,
+                                COUNT(*) FILTER (WHERE gms.finish_pos = 1) AS wins,
+                                COALESCE(AVG(gms.finish_pos), 0) AS avg_finish,
+                                COALESCE(SUM(gr.net_profit), 0) AS net_profit,
+                                COALESCE(SUM(gms.api_calls), 0)  AS api_calls,
+                                COALESCE(SUM(gms.api_failures), 0) AS api_failures,
+                                COALESCE(
+                                    AVG(gms.latency_ms) FILTER (WHERE gms.api_calls > 0),
+                                    0
+                                ) AS avg_latency_ms
+                            FROM game_model_stats gms
+                            JOIN games g ON gms.game_id = g.game_id
+                            LEFT JOIN game_results gr
+                                ON gr.game_id = gms.game_id
+                               AND gr.player_id = (
+                                   SELECT player_id FROM players
+                                   WHERE model = %s LIMIT 1
+                               )
+                            WHERE gms.model_id = %s
+                              AND g.started_at >= NOW() - (%s || ' days')::INTERVAL
+                            GROUP BY day
+                        ),
+                        errs AS (
+                            SELECT
+                                date_trunc('day', e.occurred_at) AS day,
+                                COUNT(*) AS errors
+                            FROM errors e
+                            JOIN players p ON e.player_id = p.player_id
+                            WHERE p.model = %s
+                              AND e.occurred_at >= NOW() - (%s || ' days')::INTERVAL
+                            GROUP BY day
+                        )
+                        SELECT
+                            COALESCE(gms.day, errs.day) AS date,
+                            COALESCE(gms.games, 0)         AS games,
+                            COALESCE(gms.wins, 0)          AS wins,
+                            COALESCE(gms.avg_finish, 0)    AS avg_finish,
+                            COALESCE(gms.net_profit, 0)    AS net_profit,
+                            COALESCE(gms.api_calls, 0)      AS api_calls,
+                            COALESCE(gms.api_failures, 0)  AS api_failures,
+                            COALESCE(gms.avg_latency_ms, 0) AS avg_latency_ms,
+                            COALESCE(errs.errors, 0)       AS errors
+                        FROM gms
+                        FULL OUTER JOIN errs ON gms.day = errs.day
+                        ORDER BY date;
+                        """,
+                        (model_id, model_id, str(days), model_id, str(days)),
+                    )
+                    columns = [desc[0] for desc in cur.description]
+                    rows = []
+                    for row in cur.fetchall():
+                        d = dict(zip(columns, row))
+                        if d.get("date") is not None:
+                            d["date"] = (
+                                d["date"].isoformat()
+                                if hasattr(d["date"], "isoformat")
+                                else str(d["date"])
+                            )
+                        rows.append(d)
+                    return rows
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.warning("Failed to get model daily stats: %s", e)
+            return []
+        except Exception as e:
+            logger.warning("Unexpected error getting model daily stats: %s", e)
+            return []
+
+    def get_model_style_trends(self, model_id: str, buckets: int = 10) -> list[dict]:
+        """Return rolling VPIP/PFR/AF/WTSD stats over time buckets.
+
+        Splits the player's hand history into N chronological buckets and
+        computes the same stats StatAggregator produces, per bucket.
+        Each row: {bucket, hands, vpip, pfr, af, wtsd}
+        """
+        if not self._available:
+            return []
+        try:
+            conn = self._pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        WITH ranked AS (
+                            SELECT hp.*,
+                                   h.played_at,
+                                   NTILE(%s) OVER (ORDER BY h.played_at) AS bucket
+                            FROM hand_players hp
+                            JOIN hands h ON hp.hand_id = h.hand_id
+                            JOIN players p ON hp.player_id = p.player_id
+                            WHERE p.model = %s
+                        )
+                        SELECT
+                            bucket,
+                            COUNT(*) AS hands,
+                            COALESCE(ROUND(AVG(vpip::int) * 100)::int, 0) AS vpip,
+                            COALESCE(ROUND(AVG(pfr::int) * 100)::int, 0) AS pfr,
+                            COALESCE(ROUND(AVG(went_to_showdown::int) * 100)::int, 0) AS wtsd
+                        FROM ranked
+                        GROUP BY bucket
+                        ORDER BY bucket;
+                        """,
+                        (buckets, model_id),
+                    )
+                    columns = [desc[0] for desc in cur.description]
+                    rows = []
+                    for row in cur.fetchall():
+                        d = dict(zip(columns, row))
+                        rows.append(d)
+                    return rows
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.warning("Failed to get model style trends: %s", e)
+            return []
+        except Exception as e:
+            logger.warning("Unexpected error getting style trends: %s", e)
+            return []
+
+    def get_model_summary(self, model_id: str) -> dict:
+        """Return headline summary for a model: lifetime stats + style label.
+
+        Joins leaderboard cumulative data with a rolling-window style label.
+        Returns {} on failure.
+        """
+        if not self._available:
+            return {}
+        try:
+            conn = self._pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            model_id,
+                            display_name,
+                            games_played,
+                            wins,
+                            (wins * 100.0) / NULLIF(games_played, 0) AS win_pct,
+                            placing_sum::float / NULLIF(games_played, 0) AS avg_placing,
+                            latency_sum_ms::float / NULLIF(api_calls, 0) AS avg_latency_ms,
+                            (api_failures * 100.0) / NULLIF(api_calls, 0) AS failure_rate_pct,
+                            retired
+                        FROM leaderboard
+                        WHERE model_id = %s;
+                        """,
+                        (model_id,),
+                    )
+                    columns = [desc[0] for desc in cur.description]
+                    row = cur.fetchone()
+                    if row is None:
+                        return {}
+                    summary = dict(zip(columns, row))
+
+                    # Rolling-window style from profiling tables
+                    cur.execute(
+                        "SELECT player_id FROM players WHERE model = %s ORDER BY created_at DESC LIMIT 1;",
+                        (model_id,),
+                    )
+                    pid_row = cur.fetchone()
+                    if pid_row:
+                        pid = pid_row[0]
+                        aggregator = StatAggregator()
+                        stats = aggregator.get_player_stats(conn, pid, window=self.stat_window_size)
+                        if stats is not None:
+                            summary["style"] = classify_style(
+                                stats, min_hands=self.min_hands_for_profile
+                            )
+                            summary["vpip"] = stats.vpip
+                            summary["pfr"] = stats.pfr
+                            summary["af"] = stats.af
+                            summary["wtsd"] = stats.wtsd
+                            summary["sample_hands"] = stats.hands
+                        else:
+                            summary["style"] = "Unknown"
+                            summary["sample_hands"] = 0
+                    else:
+                        summary["style"] = "Unknown"
+                        summary["sample_hands"] = 0
+                    return summary
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.warning("Failed to get model summary: %s", e)
+            return {}
+        except Exception as e:
+            logger.warning("Unexpected error getting model summary: %s", e)
+            return {}
+
+    def get_model_recent_hands(self, model_id: str, limit: int = 20) -> list[dict]:
+        """Return the most recent hand_players rows for a model.
+
+        Each row: {played_at, hand_id, game_id, vpip, pfr, went_to_showdown,
+                   won_hand, net_result, position, hole_cards}
+        """
+        if not self._available:
+            return []
+        try:
+            conn = self._pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            h.played_at, hp.hand_id, h.game_id,
+                            hp.vpip, hp.pfr, hp.three_bet, hp.went_to_showdown,
+                            hp.won_hand, hp.net_result, hp.position, hp.hole_cards
+                        FROM hand_players hp
+                        JOIN hands h ON hp.hand_id = h.hand_id
+                        JOIN players p ON hp.player_id = p.player_id
+                        WHERE p.model = %s
+                        ORDER BY h.played_at DESC
+                        LIMIT %s;
+                        """,
+                        (model_id, limit),
+                    )
+                    columns = [desc[0] for desc in cur.description]
+                    rows = []
+                    for row in cur.fetchall():
+                        d = dict(zip(columns, row))
+                        if d.get("played_at") is not None:
+                            d["played_at"] = (
+                                d["played_at"].isoformat()
+                                if hasattr(d["played_at"], "isoformat")
+                                else str(d["played_at"])
+                            )
+                        rows.append(d)
+                    return rows
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.warning("Failed to get model recent hands: %s", e)
+            return []
+        except Exception as e:
+            logger.warning("Unexpected error getting recent hands: %s", e)
+            return []

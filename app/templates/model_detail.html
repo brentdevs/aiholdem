@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ model_id }} — Model Stats</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a2e1a;
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #f0c040;
+      font-weight: 700;
+    }
+
+    .back-link {
+      color: #f0c040;
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 0.4rem 0.9rem;
+      border: 1px solid #f0c040;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .back-link:hover {
+      background: #f0c040;
+      color: #1a2e1a;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat-card {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 0.75rem;
+    }
+
+    .stat-card .label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #aaa;
+      margin-bottom: 0.2rem;
+    }
+
+    .stat-card .value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #f0c040;
+    }
+
+    .stat-card .sub {
+      font-size: 0.72rem;
+      color: #888;
+      margin-top: 0.15rem;
+    }
+
+    .section {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .section h2 {
+      font-size: 1rem;
+      color: #f0c040;
+      margin-bottom: 0.6rem;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 240px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    #error-msg {
+      display: none;
+      background: rgba(224, 64, 64, 0.15);
+      border: 1px solid #e04040;
+      color: #ff6b6b;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 0.8rem;
+      font-size: 0.85rem;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .badge-active {
+      background: rgba(126, 200, 126, 0.15);
+      color: #7ec87e;
+    }
+
+    .badge-retired {
+      background: rgba(136, 136, 136, 0.2);
+      color: #999;
+    }
+
+    .badge-style {
+      background: rgba(240, 192, 64, 0.15);
+      color: #f0c040;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    table.hands-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    .hands-table th {
+      text-align: left;
+      padding: 0.4rem;
+      border-bottom: 2px solid #3a5a3a;
+      color: #f0c040;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .hands-table td {
+      padding: 0.4rem;
+      border-bottom: 1px solid #2a3e2a;
+      white-space: nowrap;
+    }
+
+    .hands-table tr:hover td { background: rgba(240, 192, 64, 0.04); }
+
+    .yes { color: #7ec87e; }
+    .no  { color: #888; }
+
+    @media (max-width: 768px) {
+      body { padding: 0.75rem; }
+      h1 { font-size: 1.2rem; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .chart-wrap { height: 180px; }
+      .hands-table { font-size: 0.7rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 id="model-title">Model</h1>
+      <a href="/leaderboard" class="back-link">← Leaderboard</a>
+    </div>
+
+    <div id="error-msg"></div>
+
+    <div class="summary-grid" id="summary-grid">
+      <div class="stat-card"><div class="label">Games</div><div class="value" id="s-games">—</div></div>
+      <div class="stat-card"><div class="label">Wins</div><div class="value" id="s-wins">—</div></div>
+      <div class="stat-card"><div class="label">Win %</div><div class="value" id="s-winpct">—</div></div>
+      <div class="stat-card"><div class="label">Avg Placing</div><div class="value" id="s-avgplace">—</div></div>
+      <div class="stat-card"><div class="label">Avg Latency</div><div class="value" id="s-latency">—</div><div class="sub">ms / call</div></div>
+      <div class="stat-card"><div class="label">Failure Rate</div><div class="value" id="s-failrate">—</div></div>
+      <div class="stat-card"><div class="label">Style</div><div class="value" id="s-style">—</div><div class="sub" id="s-style-sub"></div></div>
+      <div class="stat-card"><div class="label">Status</div><div class="value" id="s-status">—</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <h2>Daily Win % and Placings</h2>
+        <div class="chart-wrap"><canvas id="chart-wins"></canvas></div>
+      </div>
+      <div class="section">
+        <h2>Daily Error Count</h2>
+        <div class="chart-wrap"><canvas id="chart-errors"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <h2>API Failures vs Calls (daily)</h2>
+        <div class="chart-wrap"><canvas id="chart-api"></canvas></div>
+      </div>
+      <div class="section">
+        <h2>Style Trends Over Time</h2>
+        <div class="chart-wrap"><canvas id="chart-style"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Recent Hands</h2>
+      <div style="overflow-x:auto;">
+        <table class="hands-table">
+          <thead>
+            <tr>
+              <th>Played At</th>
+              <th>Game</th>
+              <th>Pos</th>
+              <th>VPIP</th>
+              <th>PFR</th>
+              <th>3bet</th>
+              <th>WTSD</th>
+              <th>Won</th>
+              <th>Net</th>
+              <th>Hole</th>
+            </tr>
+          </thead>
+          <tbody id="hands-body">
+            <tr><td colspan="10">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    const MODEL_ID = {{ model_id|tojson }};
+    const base = '/api/model/' + encodeURIComponent(MODEL_ID);
+
+    function fmt(val, decimals) {
+      if (val === null || val === undefined) return '—';
+      return Number(val).toFixed(decimals);
+    }
+
+    function fmtDate(s) {
+      if (!s) return '—';
+      const d = new Date(s);
+      return d.toLocaleDateString();
+    }
+
+    function fmtTime(s) {
+      if (!s) return '—';
+      const d = new Date(s);
+      return d.toLocaleString();
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    const GREEN = '#7ec87e';
+    const GOLD = '#f0c040';
+    const RED = '#e06060';
+    const BLUE = '#7ecbff';
+    const PURPLE = '#b07ec8';
+
+    function makeChart(canvasId, type, datasets, labels, options) {
+      const ctx = document.getElementById(canvasId);
+      return new Chart(ctx, {
+        type: type,
+        data: { labels: labels, datasets: datasets },
+        options: Object.assign({
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#ccc', font: { size: 11 } } } },
+          scales: {
+            x: { ticks: { color: '#aaa', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { ticks: { color: '#aaa', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+          }
+        }, options || {})
+      });
+    }
+
+    let summary = null;
+
+    fetch(base + '/summary')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) { showError(data.error); return; }
+        summary = data;
+        document.getElementById('model-title').textContent = data.display_name || MODEL_ID;
+        document.getElementById('s-games').textContent = data.games_played ?? '—';
+        document.getElementById('s-wins').textContent = data.wins ?? '—';
+        document.getElementById('s-winpct').textContent = data.win_pct != null ? fmt(data.win_pct, 1) + '%' : '—';
+        document.getElementById('s-avgplace').textContent = data.avg_placing != null ? fmt(data.avg_placing, 2) : '—';
+        document.getElementById('s-latency').textContent = data.avg_latency_ms != null ? fmt(data.avg_latency_ms, 0) : '—';
+        document.getElementById('s-failrate').textContent = data.failure_rate_pct != null ? fmt(data.failure_rate_pct, 1) + '%' : '—';
+        document.getElementById('s-style').innerHTML = data.style ? '<span class="badge badge-style">' + data.style + '</span>' : '—';
+        document.getElementById('s-style-sub').textContent = data.sample_hands ? data.sample_hands + ' hands sampled' : '';
+        const statusEl = document.getElementById('s-status');
+        statusEl.innerHTML = data.retired
+          ? '<span class="badge badge-retired">Retired</span>'
+          : '<span class="badge badge-active">Active</span>';
+      })
+      .catch(function(err) { showError('Failed to load summary: ' + err.message); });
+
+    fetch(base + '/daily?days=30')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!Array.isArray(data)) return;
+        const labels = data.map(function(d) { return fmtDate(d.date); });
+        const winPct = data.map(function(d) {
+          return d.games > 0 ? (d.wins / d.games * 100) : null;
+        });
+        const avgFinish = data.map(function(d) { return d.avg_finish > 0 ? Number(d.avg_finish) : null; });
+        const errors = data.map(function(d) { return d.errors; });
+        const apiCalls = data.map(function(d) { return d.api_calls; });
+        const apiFailures = data.map(function(d) { return d.api_failures; });
+        const netProfit = data.map(function(d) { return d.net_profit; });
+
+        makeChart('chart-wins', 'bar', [
+          { label: 'Win %', data: winPct, backgroundColor: GOLD + '99', borderColor: GOLD, yAxisID: 'y' },
+          { label: 'Avg Finish', data: avgFinish, type: 'line', borderColor: BLUE, backgroundColor: BLUE, yAxisID: 'y1', tension: 0.3 }
+        ], labels, {
+          scales: {
+            x: { ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y:  { position: 'left',  title: { display: true, text: 'Win %', color: '#ccc' }, ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.05)' }, min: 0, max: 100 },
+            y1: { position: 'right', title: { display: true, text: 'Avg Finish', color: '#ccc' }, ticks: { color: '#aaa' }, grid: { drawOnChartArea: false } }
+          }
+        });
+
+        makeChart('chart-errors', 'bar', [
+          { label: 'Errors', data: errors, backgroundColor: RED + '99', borderColor: RED }
+        ], labels);
+
+        makeChart('chart-api', 'bar', [
+          { label: 'API Calls', data: apiCalls, backgroundColor: GREEN + '99', borderColor: GREEN },
+          { label: 'API Failures', data: apiFailures, backgroundColor: RED + '99', borderColor: RED }
+        ], labels);
+      })
+      .catch(function(err) { showError('Failed to load daily: ' + err.message); });
+
+    fetch(base + '/style?buckets=10')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!Array.isArray(data)) return;
+        const labels = data.map(function(d) { return 'B' + d.bucket; });
+        makeChart('chart-style', 'line', [
+          { label: 'VPIP %', data: data.map(function(d){ return d.vpip; }), borderColor: GOLD, backgroundColor: GOLD + '33', tension: 0.3 },
+          { label: 'PFR %',  data: data.map(function(d){ return d.pfr; }),  borderColor: BLUE, backgroundColor: BLUE + '33', tension: 0.3 },
+          { label: 'WTSD %', data: data.map(function(d){ return d.wtsd; }), borderColor: PURPLE, backgroundColor: PURPLE + '33', tension: 0.3 }
+        ], labels);
+      })
+      .catch(function(err) { showError('Failed to load style trends: ' + err.message); });
+
+    fetch(base + '/hands?limit=20')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        const tbody = document.getElementById('hands-body');
+        if (!Array.isArray(data) || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="10">No hand data yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = '';
+        data.forEach(function(h) {
+          const tr = document.createElement('tr');
+          function yn(v) {
+            if (v === null || v === undefined) return '<span class="no">—</span>';
+            return v ? '<span class="yes">Y</span>' : '<span class="no">N</span>';
+          }
+          tr.innerHTML =
+            '<td>' + fmtTime(h.played_at) + '</td>' +
+            '<td>' + (h.game_id || '') + '</td>' +
+            '<td>' + (h.position || '—') + '</td>' +
+            '<td>' + yn(h.vpip) + '</td>' +
+            '<td>' + yn(h.pfr) + '</td>' +
+            '<td>' + yn(h.three_bet) + '</td>' +
+            '<td>' + yn(h.went_to_showdown) + '</td>' +
+            '<td>' + yn(h.won_hand) + '</td>' +
+            '<td>' + (h.net_result != null ? h.net_result : '—') + '</td>' +
+            '<td>' + (h.hole_cards || '—') + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(function(err) {
+        document.getElementById('hands-body').innerHTML = '<tr><td colspan="10">Failed to load hands.</td></tr>';
+      });
+  </script>
+</body>
+</html>
