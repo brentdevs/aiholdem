@@ -10,14 +10,11 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs {
         inherit system;
-        config.allowUnfree = true;
       };
     in
     {
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
-          claude-code
-
           python311
           pipenv
 
@@ -25,11 +22,7 @@
 
           postgresql_16
 
-          docker-client
-          docker-compose
-
           git
-          gh
           curl
           jq
           pkg-config
@@ -63,7 +56,6 @@
           echo "Run:    pipenv run python run.py"
           echo "Test:   pipenv run pytest"
           echo "JS:     npx fast-check --test tests/property/test_card_renderer.js"
-          echo "Claude: claude"
         '';
       };
     };
