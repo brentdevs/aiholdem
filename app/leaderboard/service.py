@@ -170,7 +170,7 @@ class LeaderboardService:
                                 SUM(placing_sum)::float / NULLIF(SUM(games_played), 0) AS avg_placing,
                                 SUM(latency_sum_ms)::float / NULLIF(SUM(api_calls), 0) AS avg_latency_ms,
                                 (SUM(api_failures) * 100.0) / NULLIF(SUM(api_calls), 0) AS failure_rate_pct,
-                                BOOL_AND(retired) AS retired
+                                BOOL_OR(retired) AS retired
                             FROM leaderboard
                             GROUP BY model_id
                             ORDER BY win_pct DESC NULLS LAST;

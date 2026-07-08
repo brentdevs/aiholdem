@@ -77,8 +77,9 @@ def create_app() -> Quart:
         except Exception as exc:  # noqa: BLE001
             logger.error("Failed to pre-create arena session lobby=%s: %s", lobby_id, exc)
 
-    from app.routes import bp
+    from app.routes import bp, LobbyConverter
 
+    quart_app.url_map.converters["lobby"] = LobbyConverter
     quart_app.register_blueprint(bp)
 
     import app.events  # noqa: F401

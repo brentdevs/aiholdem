@@ -53,6 +53,13 @@ async def test_lobby_shortlink_route_returns_200(app):
 
 
 @pytest.mark.asyncio
+async def test_lobby_shortlink_unknown_returns_404(app):
+    async with app.test_client() as client:
+        response = await client.get("/not-a-lobby")
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_leaderboard_lobby_route_selects_table(app):
     from app.arena.arena_manager import LOBBY_CONFIGS
 

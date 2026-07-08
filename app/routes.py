@@ -3,6 +3,8 @@
 import logging
 
 from quart import Blueprint, Response, current_app, jsonify, render_template, request
+from werkzeug.routing import BaseConverter
+from werkzeug.routing.converters import ValidationError
 
 from app.ai.model_config import get_supported_model_configs
 from app.arena.arena_manager import (
@@ -15,6 +17,22 @@ from app.arena.arena_manager import (
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
+
+
+class LobbyConverter(BaseConverter):
+    """URL converter that only matches known arena lobby slugs.
+
+    Unknown values fail to match the route, falling through to a normal 404
+    instead of being swallowed by the catch-all shortlink route.
+    """
+
+    def to_python(self, value: str) -> str:
+        if value not in {lobby.lobby_id for lobby in LOBBY_CONFIGS}:
+            raise ValidationError(f"Unknown arena lobby: {value}")
+        return value
+
+    def to_url(self, value: str) -> str:
+        return str(value)
 
 
 async def _render_lobby(lobby_id: str):
@@ -140,6 +158,6 @@ async def get_models():
     )
 
 
-@bp.route("/<lobby_id>")
+@bp.route("/<lobby:lobby_id>")
 async def lobby_shortlink(lobby_id: str):
     return await _render_lobby(lobby_id)
