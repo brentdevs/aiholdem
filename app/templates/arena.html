@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Spectator Arena</title>
+  <title>{{ lobby.name if lobby else "AI Spectator Arena" }}</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1090,14 +1090,16 @@
   <div id="main-content">
 
     <div id="status-bar">
+      <a href="/" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:700;">Lobbies</a>
+      <div><strong>{{ lobby.name if lobby else "AI Arena" }}</strong></div>
       <div><span>Phase: </span><strong id="sb-phase">—</strong></div>
       <div><span>Turn: </span><strong id="sb-turn">—</strong></div>
       <div><span>Pot: </span><strong id="sb-pot">0</strong></div>
       <div><span>Current Bet: </span><strong id="sb-bet">0</strong></div>
       <div><span>Blinds: </span><strong id="sb-blinds">10/20</strong> <span id="sb-next-blinds" style="color:#aaa;font-size:0.8rem;margin-left:0.3rem"></span></div>
-      <a href="/leaderboard" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:600;margin-left:auto;">🏆 Leaderboard</a>
-      <a href="/faq" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:600;">❓ FAQ</a>
-      <div id="viewer-count-badge">👁 0 watching</div>
+      <a href="/leaderboard/{{ lobby.lobby_id if lobby else 'arena' }}" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:600;margin-left:auto;">Leaderboard</a>
+      <a href="/faq" style="color:#f0c040;text-decoration:none;font-size:0.85rem;font-weight:600;">FAQ</a>
+      <div id="viewer-count-badge">0 watching</div>
     </div>
 
     <!-- Table + live review panel side by side -->
@@ -1134,8 +1136,9 @@
   <!-- Mobile layout (hidden on desktop, shown on ≤768px) -->
   <div id="mobile-layout">
     <div id="mobile-nav">
-      <a href="/leaderboard">🏆 Leaderboard</a>
-      <a href="/faq">❓ FAQ</a>
+      <a href="/">Lobbies</a>
+      <a href="/leaderboard/{{ lobby.lobby_id if lobby else 'arena' }}">Leaderboard</a>
+      <a href="/faq">FAQ</a>
     </div>
     <div id="mobile-community-section">
       <div id="mobile-phase-info">—</div>
@@ -1173,10 +1176,13 @@
   </div>
 
   <!-- Mobile sidebar toggle + backdrop (tablet 769-1280px) -->
-  <button id="sidebar-toggle" aria-label="Toggle log panel">📋</button>
+  <button id="sidebar-toggle" aria-label="Toggle log panel">Log</button>
   <div id="sidebar-backdrop"></div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    window.ARENA_LOBBY_ID = {{ (lobby.lobby_id if lobby else "arena")|tojson }};
+  </script>
   <script src="/static/arena.js"></script>
   <script>
     // Mobile sidebar drawer toggle (tablet 769-1280px)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -11,6 +12,15 @@ logger = logging.getLogger(__name__)
 OPENROUTER_BACKEND = "openrouter"
 OLLAMA_BACKEND = "ollama"
 SUPPORTED_BACKENDS = (OPENROUTER_BACKEND, OLLAMA_BACKEND)
+DEFAULT_ARENA_PLAYERS = (
+    "ollama:deepseek-v4-pro,"
+    "ollama:kimi-k2.6,"
+    "ollama:glm-5.1,"
+    "ollama:minimax-m2.7,"
+    "ollama:gemma4:31b,"
+    "ollama:nemotron-3-super,"
+    "ollama:mistral-large-3:675b"
+)
 
 
 @dataclass(frozen=True)
@@ -39,6 +49,29 @@ class ModelConfig:
             "display_name": self.display_name,
             "provider_url": self.provider_url,
         }
+
+
+@dataclass(frozen=True)
+class LobbyConfig:
+    lobby_id: str
+    name: str
+    description: str
+    players: list[ModelConfig]
+
+    def as_dict(self) -> dict:
+        return {
+            "lobby_id": self.lobby_id,
+            "name": self.name,
+            "description": self.description,
+            "players": [player.as_dict() for player in self.players],
+        }
+
+
+def _slugify_lobby_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
+    if not slug:
+        raise ValueError("Lobby name must contain at least one letter or number")
+    return slug
 
 
 def _display_name(backend: str, model: str) -> str:
@@ -168,12 +201,86 @@ def load_arena_player_configs(raw_value: str | None = None) -> list[ModelConfig]
     if raw_value is None:
         raw_value = os.environ.get("ARENA_PLAYERS")
     if not raw_value or not raw_value.strip():
-        raise ValueError(
-            "ARENA_PLAYERS environment variable must be set with at least one player "
-            "(format: 'backend:model,backend:model')"
-        )
+        if raw_value == "":
+            raise ValueError(
+                "ARENA_PLAYERS environment variable must be set with at least one player "
+                "(format: 'backend:model,backend:model')"
+            )
+        raw_value = DEFAULT_ARENA_PLAYERS
     entries = _parse_arena_players(raw_value)
     return _validate_arena_entries(entries)
+
+
+def _parse_lobby_entries(raw_value: str | None = None) -> list[tuple[str, str, str]] | None:
+    if raw_value is None:
+        raw_value = os.environ.get("ARENA_LOBBIES")
+    if raw_value is None:
+        return None
+    if not raw_value.strip():
+        raise ValueError("ARENA_LOBBIES must include at least one lobby")
+
+    entries: list[tuple[str, str, str]] = []
+    for index, raw_lobby in enumerate(raw_value.split(";"), start=1):
+        lobby = raw_lobby.strip()
+        if not lobby:
+            continue
+        parts = [part.strip() for part in lobby.split("|", 2)]
+        if len(parts) != 3:
+            raise ValueError(
+                f"Invalid ARENA_LOBBIES lobby #{index}; expected "
+                "'Name|Description|backend:model,backend:model'"
+            )
+        entries.append((parts[0], parts[1], parts[2]))
+    if not entries:
+        raise ValueError("ARENA_LOBBIES must include at least one lobby")
+    return entries
+
+
+def load_lobby_configs(raw_value: str | None = None) -> list[LobbyConfig]:
+    """Load multi-lobby arena configuration.
+
+    ARENA_LOBBIES format:
+    "Main Arena|Default AI lineup|ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash;
+     Cloud Table|Ollama models|ollama:kimi-k2.6"
+
+    If no lobby config is supplied, this falls back to the legacy ARENA_PLAYERS lineup.
+    """
+    lobby_entries = _parse_lobby_entries(raw_value)
+    if lobby_entries is None:
+        return [
+            LobbyConfig(
+                lobby_id="arena",
+                name="AI Arena",
+                description="The default always-on AI poker table.",
+                players=load_arena_player_configs(),
+            )
+        ]
+
+    lobbies: list[LobbyConfig] = []
+    seen_ids: set[str] = set()
+    for index, (name, description, players_value) in enumerate(lobby_entries, start=1):
+        if not name:
+            raise ValueError(f"Arena lobby #{index} must include a name")
+        if not description:
+            raise ValueError(f"Arena lobby {name!r} must include a description")
+        if not players_value.strip():
+            raise ValueError(f"Arena lobby {name!r} must include a players list")
+
+        lobby_id = _slugify_lobby_name(name)
+        if lobby_id in seen_ids:
+            raise ValueError(f"Duplicate arena lobby name {name!r}")
+        seen_ids.add(lobby_id)
+
+        lobbies.append(
+            LobbyConfig(
+                lobby_id=lobby_id,
+                name=name,
+                description=description,
+                players=load_arena_player_configs(players_value),
+            )
+        )
+
+    return lobbies
 
 
 def get_supported_model_configs() -> list[ModelConfig]:
@@ -189,11 +296,12 @@ def get_supported_model_configs() -> list[ModelConfig]:
                 configs.append(ModelConfig(backend, model, _display_name(backend, model)))
     # Always include current arena players even if provider fetch failed
     try:
-        for config in load_arena_player_configs():
-            key = (config.backend, config.model)
-            if key not in seen:
-                seen.add(key)
-                configs.append(config)
+        for lobby in load_lobby_configs():
+            for config in lobby.players:
+                key = (config.backend, config.model)
+                if key not in seen:
+                    seen.add(key)
+                    configs.append(config)
     except ValueError:
         pass
     return configs

@@ -37,19 +37,40 @@
       font-weight: 700;
     }
 
-    .back-link {
+    .back-link,
+    .table-filter {
       color: #f0c040;
       text-decoration: none;
       font-size: 0.9rem;
       padding: 0.4rem 0.9rem;
       border: 1px solid #f0c040;
       border-radius: 6px;
+      background: transparent;
       transition: background 0.15s, color 0.15s;
     }
 
     .back-link:hover {
       background: #f0c040;
       color: #1a2e1a;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.8rem;
+    }
+
+    .controls label {
+      color: #ccc;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .table-filter {
+      min-height: 36px;
+      cursor: pointer;
     }
 
     .section {
@@ -178,12 +199,25 @@
   <div class="container">
     <div class="header">
       <h1>AI Arena Leaderboard</h1>
-      <a href="/arena" class="back-link">← Back to Arena</a>
+      <a href="/" class="back-link">Back to Lobbies</a>
     </div>
 
     <div id="error-msg"></div>
 
     <div class="section">
+      <div class="controls">
+        <label for="table-filter">Table</label>
+        <select id="table-filter" class="table-filter">
+          <option value="all" {{ "selected" if current_lobby_id == "all" else "" }}>All tables</option>
+          {% for lobby in lobbies %}
+          <option value="{{ lobby.lobby_id }}" {{ "selected" if current_lobby_id == lobby.lobby_id else "" }}>
+            {{ lobby.name }}
+          </option>
+          {% endfor %}
+        </select>
+        <a id="open-table-link" class="back-link" href="/">Open table</a>
+      </div>
+
       <div class="meta">
         <span id="last-updated"></span>
         <label style="font-size:0.8rem;color:#ccc;cursor:pointer;">
@@ -220,6 +254,9 @@
     const errorMsg = document.getElementById('error-msg');
     const lastUpdated = document.getElementById('last-updated');
     const hideRetiredCheckbox = document.getElementById('hide-retired');
+    const tableFilter = document.getElementById('table-filter');
+    const openTableLink = document.getElementById('open-table-link');
+    const initialLobbyId = {{ current_lobby_id|tojson }};
     let refreshTimer = null;
     let leaderboardData = [];
     let sortKey = 'win_pct';
@@ -305,8 +342,28 @@
       errorMsg.style.display = 'none';
     }
 
+    function currentLobbyId() {
+      return tableFilter.value || 'all';
+    }
+
+    function updateOpenTableLink() {
+      var lobbyId = currentLobbyId();
+      if (lobbyId === 'all') {
+        openTableLink.href = '/';
+        openTableLink.textContent = 'Open lobbies';
+      } else {
+        openTableLink.href = '/' + encodeURIComponent(lobbyId);
+        openTableLink.textContent = 'Open table';
+      }
+    }
+
     function fetchLeaderboard() {
-      fetch('/api/leaderboard')
+      var lobbyId = currentLobbyId();
+      var url = '/api/leaderboard';
+      if (lobbyId !== 'all') {
+        url += '?lobby_id=' + encodeURIComponent(lobbyId);
+      }
+      fetch(url)
         .then(function(res) {
           if (!res.ok) throw new Error('Server returned ' + res.status);
           return res.json();
@@ -338,7 +395,16 @@
 
     // Hide retired toggle
     hideRetiredCheckbox.addEventListener('change', renderTable);
+    tableFilter.addEventListener('change', function() {
+      var lobbyId = currentLobbyId();
+      var path = lobbyId === 'all' ? '/leaderboard' : '/leaderboard/' + encodeURIComponent(lobbyId);
+      window.history.replaceState(null, '', path);
+      updateOpenTableLink();
+      fetchLeaderboard();
+    });
 
+    tableFilter.value = initialLobbyId || 'all';
+    updateOpenTableLink();
     fetchLeaderboard();
     refreshTimer = setInterval(fetchLeaderboard, 30000);
   </script>

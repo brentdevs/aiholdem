@@ -45,30 +45,37 @@ def create_app() -> Quart:
     quart_app = Quart(__name__)
     quart_app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
 
-    from app.arena.arena_manager import ARENA_PLAYER_MODELS, arena_manager
+    from app.arena.arena_manager import arena_managers
     from app.leaderboard.service import LeaderboardService
     from app.profiling.service import ProfilingService
 
     database_url = os.environ.get("DATABASE_URL")
     leaderboard_service = LeaderboardService(database_url)
     leaderboard_service.init_db()
-    leaderboard_service.sync_retired_status(ARENA_PLAYER_MODELS)
     quart_app.leaderboard_service = leaderboard_service  # type: ignore[attr-defined]
-    arena_manager.leaderboard_service = leaderboard_service
 
     profiling_service = ProfilingService(database_url)
     profiling_service.init_db()
     quart_app.profiling_service = profiling_service  # type: ignore[attr-defined]
-    arena_manager.profiling_service = profiling_service
 
-    try:
-        arena_manager.get_or_create_session()
-        logger.info("Arena session pre-created at startup")
-        if not arena_manager._pause_on_empty:
-            arena_manager.start_ai_loop()
-            logger.info("Arena AI loop started at startup (ARENA_PAUSE_ON_EMPTY=false)")
-    except Exception as exc:  # noqa: BLE001
-        logger.error("Failed to pre-create arena session at startup: %s", exc)
+    for lobby_id, manager in arena_managers.items():
+        manager.leaderboard_service = leaderboard_service
+        manager.profiling_service = profiling_service
+        leaderboard_service.sync_retired_status(
+            [config.model for config in manager.player_configs],
+            lobby_id,
+        )
+        try:
+            manager.get_or_create_session()
+            logger.info("Arena session pre-created at startup lobby=%s", lobby_id)
+            if not manager._pause_on_empty:
+                manager.start_ai_loop()
+                logger.info(
+                    "Arena AI loop started at startup lobby=%s (ARENA_PAUSE_ON_EMPTY=false)",
+                    lobby_id,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Failed to pre-create arena session lobby=%s: %s", lobby_id, exc)
 
     from app.routes import bp
 

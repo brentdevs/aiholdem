@@ -1,4 +1,4 @@
-"""Arena manager — singleton that owns the always-on AI spectator game session."""
+"""Arena managers for always-on AI spectator game sessions."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 import os
 import time
 
-from app.ai.model_config import ModelConfig, load_arena_player_configs
+from app.ai.model_config import LobbyConfig, ModelConfig, load_lobby_configs
 from app.ai.ollama_player import OllamaCloudPlayer
 from app.ai.openrouter_player import OpenRouterPlayer
 from app.game.game_session import BLIND_SCHEDULE, STARTING_CHIPS, GameSession
@@ -16,15 +16,28 @@ from app.game.players import AIPlayer
 
 logger = logging.getLogger(__name__)
 
-ARENA_SESSION_ID = "arena"
+LOBBY_CONFIGS: list[LobbyConfig] = load_lobby_configs()
+DEFAULT_LOBBY_CONFIG = LOBBY_CONFIGS[0]
 
-ARENA_PLAYER_CONFIGS: list[ModelConfig] = load_arena_player_configs()
+ARENA_SESSION_ID = DEFAULT_LOBBY_CONFIG.lobby_id
+
+ARENA_PLAYER_CONFIGS: list[ModelConfig] = DEFAULT_LOBBY_CONFIG.players
 
 ARENA_PLAYER_MODELS: list[str] = [config.model for config in ARENA_PLAYER_CONFIGS]
+ALL_ARENA_PLAYER_MODELS: list[str] = [
+    config.model for lobby in LOBBY_CONFIGS for config in lobby.players
+]
 
 
 class ArenaManager:
-    def __init__(self) -> None:
+    def __init__(self, lobby_config: LobbyConfig | None = None) -> None:
+        if lobby_config is None:
+            lobby_config = DEFAULT_LOBBY_CONFIG
+        self.lobby_config = lobby_config
+        self.session_id = lobby_config.lobby_id
+        self.name = lobby_config.name
+        self.description = lobby_config.description
+        self.player_configs = lobby_config.players
         self.session: GameSession | None = None
         self.viewer_count: int = 0
         self._pause_on_empty: bool = (
@@ -77,7 +90,7 @@ class ArenaManager:
         if self.session is None:
             return
         state = self.get_arena_state()
-        await sio.emit("arena_state", state, room=ARENA_SESSION_ID)
+        await sio.emit("arena_state", state, room=self.session_id)
 
     def get_arena_state(self) -> dict:
         """Return spectator state — all hole cards visible."""
@@ -85,6 +98,7 @@ class ArenaManager:
             return {}
 
         state = self.session.get_public_state()
+        state["lobby"] = self.lobby_config.as_dict()
         player_map = {p.player_id: p for p in self.session.players}
         for player_entry in state["players"]:
             pid = player_entry["player_id"]
@@ -109,7 +123,7 @@ class ArenaManager:
         """Emit arena_viewer_count to the arena room."""
         from app import sio
 
-        await sio.emit("arena_viewer_count", {"count": self.viewer_count}, room=ARENA_SESSION_ID)
+        await sio.emit("arena_viewer_count", {"count": self.viewer_count}, room=self.session_id)
 
     # ------------------------------------------------------------------
     # AI game loop
@@ -293,7 +307,8 @@ class ArenaManager:
             }
             for log in session._hand_move_logs
         ]
-        await sio.emit("arena_state", state, room=ARENA_SESSION_ID)
+        state["lobby"] = self.lobby_config.as_dict()
+        await sio.emit("arena_state", state, room=self.session_id)
 
         await asyncio.sleep(10)
 
@@ -349,7 +364,7 @@ class ArenaManager:
                                 total_latency_ms=p.game_total_latency_ms,
                             )
                         )
-                self.leaderboard_service.record_game_results(results)
+                self.leaderboard_service.record_game_results(results, lobby_id=self.session_id)
                 logger.info("Recorded arena game results for %d players", len(results))
             except Exception as exc:
                 logger.error("Failed to record arena game results: %s", exc)
@@ -409,15 +424,15 @@ class ArenaManager:
                 self._elimination_order.append(p.player_id)
 
     def _create_session(self) -> GameSession:
-        """Create GameSession with ARENA_SESSION_ID and configured AI players."""
+        """Create GameSession with the configured lobby AI players."""
         self._elimination_order = []
-        session = GameSession(ARENA_SESSION_ID, "arena")
+        session = GameSession(self.session_id, self.name)
         session.profiling_service = self.profiling_service
-        for config in ARENA_PLAYER_CONFIGS:
+        for config in self.player_configs:
             model = config.model
             backend = config.backend
             safe_model = model.replace("/", "_").replace(":", "_").replace(".", "_")
-            player_id = f"arena_{backend}_{safe_model}"
+            player_id = f"{self.session_id}_{backend}_{safe_model}"
             if backend == "ollama":
                 player = OllamaCloudPlayer(
                     player_id=player_id,
@@ -436,7 +451,11 @@ class ArenaManager:
             player.reset_game_stats()
             session.add_player(player)
         session.start_game()
-        logger.info("Arena session created with %d players", len(session.players))
+        logger.info(
+            "Arena session created lobby=%s players=%d",
+            self.session_id,
+            len(session.players),
+        )
 
         # Record game start for profiling
         if self.profiling_service is not None and self.profiling_service.available:
@@ -452,7 +471,7 @@ class ArenaManager:
                 ]
                 self.profiling_service.record_game_start(
                     game_id=session.profiling_game_id,
-                    game_type="arena",
+                    game_type=f"arena:{self.session_id}",
                     blind_structure=BLIND_SCHEDULE,
                     num_players=len(session.players),
                     players=players_data,
@@ -463,5 +482,46 @@ class ArenaManager:
         return session
 
 
-# Module-level singleton
-arena_manager = ArenaManager()
+arena_managers: dict[str, ArenaManager] = {
+    lobby.lobby_id: ArenaManager(lobby) for lobby in LOBBY_CONFIGS
+}
+
+# Backward-compatible default manager and constants.
+arena_manager = arena_managers[DEFAULT_LOBBY_CONFIG.lobby_id]
+
+
+def get_arena_manager(lobby_id: str | None = None) -> ArenaManager:
+    key = lobby_id or DEFAULT_LOBBY_CONFIG.lobby_id
+    try:
+        return arena_managers[key]
+    except KeyError as exc:
+        raise ValueError(f"Unknown arena lobby: {key}") from exc
+
+
+def get_lobby_summaries() -> list[dict]:
+    summaries: list[dict] = []
+    for lobby in LOBBY_CONFIGS:
+        manager = arena_managers[lobby.lobby_id]
+        provider_counts: dict[str, int] = {}
+        for player in lobby.players:
+            provider_counts[player.backend] = provider_counts.get(player.backend, 0) + 1
+        session = manager.session
+        hand_number = session.hand_number if session is not None else 0
+        is_live = manager.viewer_count > 0 and not manager.paused
+        summaries.append(
+            {
+                "lobby_id": lobby.lobby_id,
+                "name": lobby.name,
+                "description": lobby.description,
+                "players": [player.as_dict() for player in lobby.players],
+                "player_count": len(lobby.players),
+                "provider_counts": provider_counts,
+                "viewer_count": manager.viewer_count,
+                "is_paused": manager.paused,
+                "is_live": is_live,
+                "status_label": "Live" if is_live else "Paused",
+                "hand_number": hand_number,
+                "url": f"/{lobby.lobby_id}",
+            }
+        )
+    return summaries
