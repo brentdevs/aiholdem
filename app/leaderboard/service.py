@@ -51,7 +51,9 @@ class LeaderboardService:
                         "ALTER TABLE leaderboard "
                         "ADD COLUMN IF NOT EXISTS lobby_id TEXT NOT NULL DEFAULT 'arena';"
                     )
-                    cur.execute("ALTER TABLE leaderboard DROP CONSTRAINT IF EXISTS leaderboard_pkey;")
+                    cur.execute(
+                        "ALTER TABLE leaderboard DROP CONSTRAINT IF EXISTS leaderboard_pkey;"
+                    )
                     cur.execute(
                         "ALTER TABLE leaderboard "
                         "ADD CONSTRAINT leaderboard_pkey PRIMARY KEY (lobby_id, model_id);"
