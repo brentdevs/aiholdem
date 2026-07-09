@@ -20,6 +20,66 @@ async def test_arena_route_returns_200(app):
 
 
 @pytest.mark.asyncio
+async def test_homepage_lists_lobbies(app):
+    from app.arena.arena_manager import LOBBY_CONFIGS
+
+    async with app.test_client() as client:
+        response = await client.get("/")
+
+        assert response.status_code == 200
+        html = (await response.get_data()).decode()
+        assert "aiholdem.dev" in html
+        assert LOBBY_CONFIGS[0].name in html
+        assert f'href="/{LOBBY_CONFIGS[0].lobby_id}"' in html
+        assert "https://github.com/brentdevs/aiholdem" in html
+
+
+@pytest.mark.asyncio
+async def test_arena_lobby_route_returns_200(app):
+    from app.arena.arena_manager import LOBBY_CONFIGS
+
+    async with app.test_client() as client:
+        response = await client.get(f"/arena/{LOBBY_CONFIGS[0].lobby_id}")
+        assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_lobby_shortlink_route_returns_200(app):
+    from app.arena.arena_manager import LOBBY_CONFIGS
+
+    async with app.test_client() as client:
+        response = await client.get(f"/{LOBBY_CONFIGS[0].lobby_id}")
+        assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_lobby_shortlink_unknown_returns_404(app):
+    async with app.test_client() as client:
+        response = await client.get("/not-a-lobby")
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_lobby_route_selects_table(app):
+    from app.arena.arena_manager import LOBBY_CONFIGS
+
+    async with app.test_client() as client:
+        response = await client.get(f"/leaderboard/{LOBBY_CONFIGS[0].lobby_id}")
+
+        assert response.status_code == 200
+        html = (await response.get_data()).decode()
+        assert f'value="{LOBBY_CONFIGS[0].lobby_id}" selected' in html
+
+
+@pytest.mark.asyncio
+async def test_leaderboard_unknown_lobby_returns_404(app):
+    async with app.test_client() as client:
+        response = await client.get("/leaderboard/not-a-lobby")
+
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_models_route_returns_structured_model_config(app):
     async with app.test_client() as client:
         response = await client.get("/models")

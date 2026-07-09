@@ -13,7 +13,7 @@
 const socket = io();
 
 socket.on("connect", () => {
-  socket.emit("join_arena", {});
+  socket.emit("join_arena", { lobby_id: window.ARENA_LOBBY_ID || "arena" });
 });
 
 socket.on("arena_state", state => {
@@ -24,7 +24,12 @@ socket.on("arena_state", state => {
 
 socket.on("arena_viewer_count", data => {
   const badge = document.getElementById("viewer-count-badge");
-  if (badge) badge.textContent = `👁 ${data.count} watching`;
+  if (badge) badge.textContent = `${data.count} watching`;
+});
+
+socket.on("arena_error", data => {
+  const messages = document.getElementById("messages");
+  if (messages) messages.textContent = data.error || "Arena unavailable";
 });
 
 // ---------------------------------------------------------------------------

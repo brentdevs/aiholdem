@@ -2,14 +2,49 @@
 
 import logging
 
-from quart import Blueprint, Response, current_app, jsonify, redirect, render_template, url_for
+from quart import Blueprint, Response, current_app, jsonify, render_template, request
+from werkzeug.routing import BaseConverter
+from werkzeug.routing.converters import ValidationError
 
 from app.ai.model_config import get_supported_model_configs
-from app.arena.arena_manager import ARENA_PLAYER_CONFIGS
+from app.arena.arena_manager import (
+    ARENA_PLAYER_CONFIGS,
+    LOBBY_CONFIGS,
+    get_arena_manager,
+    get_lobby_summaries,
+)
 
 logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
+
+
+class LobbyConverter(BaseConverter):
+    """URL converter that only matches known arena lobby slugs.
+
+    Unknown values fail to match the route, falling through to a normal 404
+    instead of being swallowed by the catch-all shortlink route.
+    """
+
+    def to_python(self, value: str) -> str:
+        if value not in {lobby.lobby_id for lobby in LOBBY_CONFIGS}:
+            raise ValidationError(f"Unknown arena lobby: {value}")
+        return value
+
+    def to_url(self, value: str) -> str:
+        return str(value)
+
+
+async def _render_lobby(lobby_id: str):
+    try:
+        manager = get_arena_manager(lobby_id)
+    except ValueError:
+        return Response("Arena lobby not found", status=404)
+    return await render_template(
+        "arena.html",
+        lobby=manager.lobby_config,
+        arena_players=manager.player_configs,
+    )
 
 
 # ── Favicon ───────────────────────────────────────────────────────────────────
@@ -34,12 +69,22 @@ async def favicon():
 
 @bp.route("/")
 async def index():
-    return redirect(url_for("main.arena"))
+    return await render_template("lobbies.html", lobbies=get_lobby_summaries())
 
 
 @bp.route("/arena")
 async def arena():
-    return await render_template("arena.html")
+    default_lobby = LOBBY_CONFIGS[0]
+    return await render_template(
+        "arena.html",
+        lobby=default_lobby,
+        arena_players=default_lobby.players,
+    )
+
+
+@bp.route("/arena/<lobby_id>")
+async def arena_lobby(lobby_id: str):
+    return await _render_lobby(lobby_id)
 
 
 @bp.route("/faq")
@@ -53,7 +98,24 @@ async def faq():
 
 @bp.route("/leaderboard")
 async def leaderboard():
-    return await render_template("leaderboard.html")
+    return await render_template(
+        "leaderboard.html",
+        lobbies=get_lobby_summaries(),
+        current_lobby_id=request.args.get("lobby_id", "all"),
+    )
+
+
+@bp.route("/leaderboard/<lobby_id>")
+async def leaderboard_lobby(lobby_id: str):
+    try:
+        get_arena_manager(lobby_id)
+    except ValueError:
+        return Response("Arena lobby not found", status=404)
+    return await render_template(
+        "leaderboard.html",
+        lobbies=get_lobby_summaries(),
+        current_lobby_id=lobby_id,
+    )
 
 
 @bp.route("/api/leaderboard")
@@ -61,7 +123,15 @@ async def api_leaderboard():
     service = current_app.leaderboard_service
     if not service.available:
         return jsonify({"error": "Leaderboard unavailable"}), 503
-    return jsonify(service.get_leaderboard())
+    lobby_id = request.args.get("lobby_id")
+    if lobby_id == "all":
+        lobby_id = None
+    if lobby_id is not None:
+        try:
+            get_arena_manager(lobby_id)
+        except ValueError:
+            return jsonify({"error": "Arena lobby not found"}), 404
+    return jsonify(service.get_leaderboard(lobby_id=lobby_id))
 
 
 @bp.route("/models")
@@ -73,6 +143,7 @@ async def get_models():
         {
             "models": supported,
             "arena_players": arena_players,
+            "lobbies": [lobby.as_dict() for lobby in LOBBY_CONFIGS],
             "backends": {
                 "openrouter": [
                     config.as_dict()
@@ -85,3 +156,8 @@ async def get_models():
             },
         }
     )
+
+
+@bp.route("/<lobby:lobby_id>")
+async def lobby_shortlink(lobby_id: str):
+    return await _render_lobby(lobby_id)

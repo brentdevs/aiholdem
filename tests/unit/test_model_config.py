@@ -12,6 +12,7 @@ from app.ai.model_config import (
     _validate_arena_entries,
     arena_players_env_value,
     load_arena_player_configs,
+    load_lobby_configs,
 )
 
 
@@ -73,3 +74,35 @@ def test_model_allowed_when_provider_unavailable():
     with patch("app.ai.model_config._get_available_models", return_value=empty):
         configs = load_arena_player_configs(raw_value="ollama:anything-goes")
     assert configs[0].model == "anything-goes"
+
+
+def test_multi_lobby_config_parses_env_value():
+    configs = load_lobby_configs(
+        raw_value=(
+            "Main Arena|Balanced table|"
+            "ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash;"
+            "Cloud Table|Ollama models|ollama:kimi-k2.6"
+        )
+    )
+
+    assert [config.lobby_id for config in configs] == ["main-arena", "cloud-table"]
+    assert configs[0].name == "Main Arena"
+    assert [player.model for player in configs[0].players] == [
+        "deepseek-v4-pro",
+        "google/gemini-2.5-flash",
+    ]
+
+
+def test_multi_lobby_requires_description():
+    with pytest.raises(ValueError, match="must include a description"):
+        load_lobby_configs(raw_value="Main Arena||ollama:deepseek-v4-pro")
+
+
+def test_empty_multi_lobby_config_is_rejected():
+    with pytest.raises(ValueError, match="at least one lobby"):
+        load_lobby_configs(raw_value="")
+
+
+def test_malformed_multi_lobby_config_is_rejected():
+    with pytest.raises(ValueError, match="expected"):
+        load_lobby_configs(raw_value="Main Arena|ollama:deepseek-v4-pro")
