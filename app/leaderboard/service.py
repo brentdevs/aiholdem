@@ -153,17 +153,23 @@ class LeaderboardService:
         except (OperationalError, DatabaseError) as e:
             logger.error("Failed to sync retired status: %s", e)
 
-    def get_leaderboard(self, lobby_id: str | None = None) -> list[dict]:
+    def get_model_summary(self, model_id: str, lobby_id: str | None = None) -> dict | None:
+        """Return aggregate stats for one model.
+
+        With lobby_id=None the row aggregates the model across every lobby
+        (matching the "All tables" leaderboard view). Pass a lobby_id to scope
+        the summary to a single lobby. Returns None when the model is unknown.
+        """
         if not self._available:
-            return []
+            return None
         try:
             conn = self._pool.getconn()
             try:
                 with conn.cursor() as cur:
                     if lobby_id is None:
-                        cur.execute("""
+                        cur.execute(
+                            """
                             SELECT
-                                'all' AS lobby_id,
                                 model_id,
                                 MAX(display_name) AS display_name,
                                 SUM(games_played) AS games_played,
@@ -172,9 +178,65 @@ class LeaderboardService:
                                 SUM(placing_sum)::float / NULLIF(SUM(games_played), 0) AS avg_placing,
                                 SUM(latency_sum_ms)::float / NULLIF(SUM(api_calls), 0) AS avg_latency_ms,
                                 (SUM(api_failures) * 100.0) / NULLIF(SUM(api_calls), 0) AS failure_rate_pct,
-                                BOOL_OR(retired) AS retired
+                                BOOL_AND(retired) AS retired
                             FROM leaderboard
-                            GROUP BY model_id
+                            WHERE model_id = %s
+                            GROUP BY model_id;
+                            """,
+                            (model_id,),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            SELECT
+                                model_id,
+                                display_name,
+                                games_played,
+                                wins,
+                                (wins * 100.0) / NULLIF(games_played, 0) AS win_pct,
+                                placing_sum::float / NULLIF(games_played, 0) AS avg_placing,
+                                latency_sum_ms::float / NULLIF(api_calls, 0) AS avg_latency_ms,
+                                (api_failures * 100.0) / NULLIF(api_calls, 0) AS failure_rate_pct,
+                                retired
+                            FROM leaderboard
+                            WHERE model_id = %s AND lobby_id = %s;
+                            """,
+                            (model_id, lobby_id),
+                        )
+                    row = cur.fetchone()
+                    if row is None:
+                        return None
+                    columns = [desc[0] for desc in cur.description]
+                    return dict(zip(columns, row))
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.error("Failed to get model summary for %s: %s", model_id, e)
+            return None
+
+    def get_leaderboard(self, lobby_id: str | None = None) -> list[dict]:
+        if not self._available:
+            return []
+        try:
+            conn = self._pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    if lobby_id is None:
+                        # "All tables" — one row per (lobby, model) so each
+                        # lobby's metrics stay separate rather than aggregated.
+                        cur.execute("""
+                            SELECT
+                                lobby_id,
+                                model_id,
+                                display_name,
+                                games_played,
+                                wins,
+                                (wins * 100.0) / NULLIF(games_played, 0) AS win_pct,
+                                placing_sum::float / NULLIF(games_played, 0) AS avg_placing,
+                                latency_sum_ms::float / NULLIF(api_calls, 0) AS avg_latency_ms,
+                                (api_failures * 100.0) / NULLIF(api_calls, 0) AS failure_rate_pct,
+                                retired
+                            FROM leaderboard
                             ORDER BY win_pct DESC NULLS LAST;
                         """)
                     else:

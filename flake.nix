@@ -20,6 +20,8 @@
 
           nodejs_22
 
+          postgresql_16
+
           git
           curl
           jq
@@ -40,6 +42,7 @@
           LOG_LEVEL = "INFO";
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
             pkgs.openssl
+            pkgs.postgresql_16
             pkgs.zlib
           ];
         };

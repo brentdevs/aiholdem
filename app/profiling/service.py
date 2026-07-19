@@ -146,6 +146,19 @@ class ProfilingService:
                             occurred_at     TIMESTAMPTZ DEFAULT NOW()
                         );
                     """)
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_games_started_at ON games(started_at);"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_errors_occurred_at ON errors(occurred_at);"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_errors_player_id ON errors(player_id);"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_game_results_player_id ON game_results(player_id);"
+                    )
+                    cur.execute("CREATE INDEX IF NOT EXISTS idx_players_model ON players(model);")
                 conn.commit()
             finally:
                 self._pool.putconn(conn)
@@ -369,6 +382,140 @@ class ProfilingService:
     # ------------------------------------------------------------------ #
     #  Profile generation                                                  #
     # ------------------------------------------------------------------ #
+
+    def get_model_history(self, model_id: str, lobby_id: str | None = None) -> dict:
+        """Return time-series stats for a model keyed by calendar day.
+
+        Queries game_results, errors, and hand_players for the player IDs that
+        run this model. With lobby_id=None the series aggregate the model across
+        every lobby; pass a lobby_id to scope to a single lobby's seat.
+        Returns empty lists when profiling is unavailable or the model has no data.
+        """
+        empty: dict = {"performance": [], "errors": [], "style_trends": [], "style": None}
+        if not self._available:
+            return empty
+        try:
+            conn = self._pool.getconn()
+            try:
+                result: dict = {
+                    "performance": [],
+                    "errors": [],
+                    "style_trends": [],
+                    "style": None,
+                }
+
+                with conn.cursor() as cur:
+                    # Resolve the set of player IDs running this model. Arena seats
+                    # are named "<lobby_id>_<backend>_<model>", so a lobby filter is
+                    # a prefix match on player_id.
+                    if lobby_id is None:
+                        cur.execute(
+                            "SELECT player_id FROM players WHERE model = %s;",
+                            (model_id,),
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT player_id FROM players WHERE model = %s AND player_id LIKE %s;",
+                            (model_id, f"{lobby_id}\\_%"),
+                        )
+                    player_ids = [r[0] for r in cur.fetchall()]
+
+                    if not player_ids:
+                        return result
+
+                    cur.execute(
+                        """
+                        SELECT
+                            date_trunc('day', g.started_at)::date AS day,
+                            COUNT(*)                              AS games,
+                            SUM(CASE WHEN gr.finish_position = 1 THEN 1 ELSE 0 END) AS wins,
+                            ROUND(AVG(gr.finish_position)::numeric, 2) AS avg_placing
+                        FROM game_results gr
+                        JOIN games g USING (game_id)
+                        WHERE gr.player_id = ANY(%s)
+                        GROUP BY 1
+                        ORDER BY 1;
+                        """,
+                        (player_ids,),
+                    )
+                    for row in cur.fetchall():
+                        result["performance"].append(
+                            {
+                                "day": row[0].isoformat(),
+                                "games": row[1],
+                                "wins": row[2],
+                                "avg_placing": float(row[3]) if row[3] is not None else None,
+                            }
+                        )
+
+                    cur.execute(
+                        """
+                        SELECT
+                            date_trunc('day', occurred_at)::date AS day,
+                            COUNT(*) AS errors
+                        FROM errors
+                        WHERE player_id = ANY(%s)
+                        GROUP BY 1
+                        ORDER BY 1;
+                        """,
+                        (player_ids,),
+                    )
+                    for row in cur.fetchall():
+                        result["errors"].append({"day": row[0].isoformat(), "errors": row[1]})
+
+                    cur.execute(
+                        """
+                        SELECT
+                            date_trunc('day', h.played_at)::date         AS day,
+                            ROUND(AVG(hp.vpip::int) * 100)::int          AS vpip,
+                            ROUND(AVG(hp.pfr::int) * 100)::int           AS pfr,
+                            COUNT(*)                                      AS hands
+                        FROM hand_players hp
+                        JOIN hands h USING (hand_id)
+                        WHERE hp.player_id = ANY(%s)
+                        GROUP BY 1
+                        ORDER BY 1;
+                        """,
+                        (player_ids,),
+                    )
+                    for row in cur.fetchall():
+                        result["style_trends"].append(
+                            {
+                                "day": row[0].isoformat(),
+                                "vpip": row[1],
+                                "pfr": row[2],
+                                "hands": row[3],
+                            }
+                        )
+
+                aggregator = StatAggregator()
+                stats = aggregator.get_player_stats(
+                    conn, player_ids[0], window=self.stat_window_size
+                )
+                if stats is not None:
+                    style_label = classify_style(stats, min_hands=self.min_hands_for_profile)
+                    result["style"] = {
+                        "hands": stats.hands,
+                        "vpip": stats.vpip,
+                        "pfr": stats.pfr,
+                        "af": stats.af,
+                        "three_bet": stats.three_bet,
+                        "fold_to_three_bet": stats.fold_to_three_bet,
+                        "cbet": stats.cbet,
+                        "fold_to_cbet": stats.fold_to_cbet,
+                        "wtsd": stats.wtsd,
+                        "label": style_label,
+                    }
+
+                return result
+            finally:
+                self._pool.putconn(conn)
+        except (OperationalError, DatabaseError) as e:
+            logger.error("Failed to get model history for %s: %s", model_id, e)
+            return empty
+        except Exception as e:
+            logger.error("Unexpected error in get_model_history for %s: %s", model_id, e)
+            return empty
 
     def get_opponent_profiles(
         self,

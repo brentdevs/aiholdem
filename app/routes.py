@@ -134,6 +134,54 @@ async def api_leaderboard():
     return jsonify(service.get_leaderboard(lobby_id=lobby_id))
 
 
+@bp.route("/models/<path:model_id>")
+async def model_stats_page(model_id: str):
+    # Optional lobby scope — the leaderboard links here with ?lobby_id=<slug>
+    # so the page shows one model+lobby combination.
+    lobby_id = request.args.get("lobby_id") or None
+    lobby_name = None
+    if lobby_id is not None:
+        lobby_name = next(
+            (lobby.name for lobby in LOBBY_CONFIGS if lobby.lobby_id == lobby_id),
+            None,
+        )
+    return await render_template(
+        "model_stats.html",
+        model_id=model_id,
+        lobby_id=lobby_id,
+        lobby_name=lobby_name,
+    )
+
+
+@bp.route("/api/models/<path:model_id>/stats")
+async def api_model_stats(model_id: str):
+    leaderboard_service = current_app.leaderboard_service
+    profiling_service = current_app.profiling_service
+
+    if not leaderboard_service.available:
+        return jsonify({"error": "Service unavailable"}), 503
+
+    # Optional lobby scope — defaults to aggregating the model across all lobbies.
+    lobby_id = request.args.get("lobby_id")
+    if lobby_id == "all":
+        lobby_id = None
+    if lobby_id is not None:
+        try:
+            get_arena_manager(lobby_id)
+        except ValueError:
+            return jsonify({"error": "Arena lobby not found"}), 404
+
+    summary = leaderboard_service.get_model_summary(model_id, lobby_id=lobby_id)
+    if summary is None:
+        return jsonify({"error": "Model not found"}), 404
+
+    history: dict = {}
+    if profiling_service.available:
+        history = profiling_service.get_model_history(model_id, lobby_id=lobby_id)
+
+    return jsonify({"summary": summary, "history": history})
+
+
 @bp.route("/models")
 async def get_models():
     supported_configs = get_supported_model_configs()

@@ -232,6 +232,7 @@
           <tr>
             <th>Rank</th>
             <th>Model</th>
+            <th>Lobby</th>
             <th class="num" data-key="games_played">Games</th>
             <th class="num" data-key="wins">Wins</th>
             <th class="num" data-key="win_pct">Win %</th>
@@ -242,7 +243,7 @@
           </tr>
         </thead>
         <tbody id="leaderboard-body">
-          <tr id="no-data"><td colspan="9">Loading…</td></tr>
+          <tr id="no-data"><td colspan="10">Loading…</td></tr>
         </tbody>
       </table>
       </div>
@@ -257,6 +258,9 @@
     const tableFilter = document.getElementById('table-filter');
     const openTableLink = document.getElementById('open-table-link');
     const initialLobbyId = {{ current_lobby_id|tojson }};
+    const lobbyNames = {};
+    {% for lobby in lobbies %}lobbyNames[{{ lobby.lobby_id|tojson }}] = {{ lobby.name|tojson }};
+    {% endfor %}
     let refreshTimer = null;
     let leaderboardData = [];
     let sortKey = 'win_pct';
@@ -295,7 +299,7 @@
       });
 
       if (!data.length) {
-        tbody.innerHTML = '<tr id="no-data"><td colspan="9">No leaderboard data yet.</td></tr>';
+        tbody.innerHTML = '<tr id="no-data"><td colspan="10">No leaderboard data yet.</td></tr>';
         return;
       }
 
@@ -312,9 +316,14 @@
           ? '<span class="badge-retired">Retired</span>'
           : '<span class="badge-active">Active</span>';
 
+        var lobbyName = lobbyNames[entry.lobby_id] || entry.lobby_id;
+        var modelHref = '/models/' + entry.model_id +
+          (entry.lobby_id ? '?lobby_id=' + encodeURIComponent(entry.lobby_id) : '');
+
         tr.innerHTML =
           '<td class="rank-cell">' + (i + 1) + '</td>' +
-          '<td class="model-name">' + escapeHtml(entry.display_name) + '</td>' +
+          '<td class="model-name"><a href="' + modelHref + '" style="color:inherit;text-decoration:none;border-bottom:1px solid rgba(240,192,64,0.35);" onmouseover="this.style.borderBottomColor=\'#f0c040\'" onmouseout="this.style.borderBottomColor=\'rgba(240,192,64,0.35)\'">' + escapeHtml(entry.display_name) + '</a></td>' +
+          '<td>' + escapeHtml(lobbyName) + '</td>' +
           '<td class="num">' + entry.games_played + '</td>' +
           '<td class="num">' + entry.wins + '</td>' +
           '<td class="num">' + (winPct !== '—' ? winPct + '%' : '—') + '</td>' +

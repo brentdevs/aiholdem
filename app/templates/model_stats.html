@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model Stats</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1a2e1a;
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.2rem;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #f0c040;
+      font-weight: 700;
+    }
+
+    .back-link {
+      color: #f0c040;
+      text-decoration: none;
+      font-size: 0.9rem;
+      padding: 0.4rem 0.9rem;
+      border: 1px solid #f0c040;
+      border-radius: 6px;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .back-link:hover {
+      background: #f0c040;
+      color: #1a2e1a;
+    }
+
+    .lobby-chip {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(126, 203, 255, 0.12);
+      border: 1px solid rgba(126, 203, 255, 0.4);
+      color: #7ecbff;
+      font-weight: 600;
+    }
+
+    .badge-retired {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(136, 136, 136, 0.2);
+      color: #999;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-active {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: rgba(126, 200, 126, 0.15);
+      color: #7ec87e;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    #error-msg {
+      display: none;
+      background: rgba(224, 64, 64, 0.15);
+      border: 1px solid #e04040;
+      color: #ff6b6b;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 0.8rem;
+      font-size: 0.85rem;
+    }
+
+    /* ── Stat cards ─────────────────────────────────────────────── */
+
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.6rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .stat-card {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 0.75rem 0.6rem;
+      text-align: center;
+    }
+
+    .stat-card .label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #aaa;
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-card .value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f0c040;
+    }
+
+    /* ── Style card ─────────────────────────────────────────────── */
+
+    .style-card {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      margin-bottom: 0.8rem;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.6rem 1.5rem;
+    }
+
+    .style-label {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #7ecbff;
+    }
+
+    .style-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 1.2rem;
+    }
+
+    .style-stat {
+      font-size: 0.8rem;
+      color: #ccc;
+    }
+
+    .style-stat span {
+      color: #e8e8e8;
+      font-weight: 600;
+    }
+
+    .style-hands {
+      font-size: 0.75rem;
+      color: #888;
+      margin-left: auto;
+    }
+
+    /* ── Charts grid ────────────────────────────────────────────── */
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem;
+    }
+
+    .chart-box {
+      background: #243824;
+      border: 1px solid #3a5a3a;
+      border-radius: 8px;
+      padding: 1rem;
+      position: relative;
+      min-height: 240px;
+    }
+
+    .chart-box h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #f0c040;
+      margin-bottom: 0.6rem;
+    }
+
+    .no-data {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    @media (max-width: 860px) {
+      .stat-cards { grid-template-columns: repeat(3, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      body { padding: 0.75rem; }
+      h1 { font-size: 1.2rem; }
+      .stat-cards { grid-template-columns: repeat(2, 1fr); }
+      .stat-card .value { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <h1 id="model-title">Loading…</h1>
+        <span id="lobby-chip" class="lobby-chip" style="display:none;"></span>
+        <span id="status-badge"></span>
+      </div>
+      <a href="/leaderboard" id="back-link" class="back-link">← Leaderboard</a>
+    </div>
+
+    <div id="error-msg"></div>
+
+    <div class="stat-cards" id="stat-cards">
+      <div class="stat-card"><div class="label">Games</div><div class="value" id="s-games">—</div></div>
+      <div class="stat-card"><div class="label">Wins</div><div class="value" id="s-wins">—</div></div>
+      <div class="stat-card"><div class="label">Win %</div><div class="value" id="s-win-pct">—</div></div>
+      <div class="stat-card"><div class="label">Avg Placing</div><div class="value" id="s-placing">—</div></div>
+      <div class="stat-card"><div class="label">Avg Latency</div><div class="value" id="s-latency">—</div></div>
+      <div class="stat-card"><div class="label">Error Rate</div><div class="value" id="s-errors">—</div></div>
+    </div>
+
+    <div class="style-card" id="style-card" style="display:none;">
+      <div class="style-label" id="style-label"></div>
+      <div class="style-stats" id="style-stats"></div>
+      <div class="style-hands" id="style-hands"></div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-box">
+        <h3>Cumulative Win Rate</h3>
+        <canvas id="chart-winrate"></canvas>
+        <div class="no-data" id="nd-winrate" style="display:none;">No game data yet</div>
+      </div>
+      <div class="chart-box">
+        <h3>Avg Placement per Day</h3>
+        <canvas id="chart-placing"></canvas>
+        <div class="no-data" id="nd-placing" style="display:none;">No game data yet</div>
+      </div>
+      <div class="chart-box">
+        <h3>API Errors per Day</h3>
+        <canvas id="chart-errors"></canvas>
+        <div class="no-data" id="nd-errors" style="display:none;">No error data yet</div>
+      </div>
+      <div class="chart-box">
+        <h3>VPIP / PFR Trend</h3>
+        <canvas id="chart-style"></canvas>
+        <div class="no-data" id="nd-style" style="display:none;">No hand data yet</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var MODEL_ID = {{ model_id | tojson }};
+    var LOBBY_ID = {{ lobby_id | tojson }};
+    var LOBBY_NAME = {{ lobby_name | tojson }};
+
+    // Scope the whole page to a lobby when one was passed in the URL.
+    if (LOBBY_ID) {
+      var chip = document.getElementById('lobby-chip');
+      chip.textContent = LOBBY_NAME || LOBBY_ID;
+      chip.style.display = 'inline-block';
+      document.getElementById('back-link').href = '/leaderboard/' + encodeURIComponent(LOBBY_ID);
+    }
+
+    var CHART_DEFAULTS = {
+      color: '#e8e8e8',
+      borderColor: 'rgba(255,255,255,0.08)',
+    };
+
+    Chart.defaults.color = '#aaa';
+    Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
+
+    function fmt(val, dec) {
+      if (val === null || val === undefined) return '—';
+      return Number(val).toFixed(dec);
+    }
+
+    function fmtPct(val) {
+      if (val === null || val === undefined) return '—';
+      return Number(val).toFixed(1) + '%';
+    }
+
+    function escapeHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function showError(msg) {
+      var el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function renderSummary(s) {
+      document.getElementById('model-title').textContent = s.display_name;
+      document.title = s.display_name + ' — Stats';
+
+      var badge = document.getElementById('status-badge');
+      if (s.retired) {
+        badge.innerHTML = '<span class="badge-retired">Retired</span>';
+      } else {
+        badge.innerHTML = '<span class="badge-active">Active</span>';
+      }
+
+      document.getElementById('s-games').textContent = s.games_played;
+      document.getElementById('s-wins').textContent = s.wins;
+      document.getElementById('s-win-pct').textContent = fmtPct(s.win_pct);
+      document.getElementById('s-placing').textContent = fmt(s.avg_placing, 1);
+      document.getElementById('s-latency').textContent = s.avg_latency_ms !== null ? Math.round(s.avg_latency_ms) + 'ms' : '—';
+      document.getElementById('s-errors').textContent = fmtPct(s.failure_rate_pct);
+    }
+
+    function renderStyle(style) {
+      if (!style) return;
+      var card = document.getElementById('style-card');
+      card.style.display = 'flex';
+      document.getElementById('style-label').textContent = style.label;
+      document.getElementById('style-hands').textContent = style.hands + ' hands sampled';
+
+      var stats = [
+        ['VPIP', style.vpip + '%'],
+        ['PFR', style.pfr + '%'],
+        ['AF', fmt(style.af, 2)],
+        ['3-Bet', style.three_bet + '%'],
+        ['Fold→3B', style.fold_to_three_bet + '%'],
+        ['CBet', style.cbet + '%'],
+        ['Fold→CB', style.fold_to_cbet + '%'],
+        ['WTSD', style.wtsd + '%'],
+      ];
+      var html = stats.map(function(pair) {
+        return '<div class="style-stat">' + pair[0] + ': <span>' + pair[1] + '</span></div>';
+      }).join('');
+      document.getElementById('style-stats').innerHTML = html;
+    }
+
+    function buildWinRateChart(performance) {
+      var canvas = document.getElementById('chart-winrate');
+      if (!performance.length) {
+        canvas.style.display = 'none';
+        document.getElementById('nd-winrate').style.display = 'flex';
+        return;
+      }
+
+      var labels = [], winRates = [];
+      var totalGames = 0, totalWins = 0;
+      performance.forEach(function(d) {
+        totalGames += d.games;
+        totalWins += d.wins;
+        labels.push(d.day);
+        winRates.push(totalGames > 0 ? parseFloat((totalWins / totalGames * 100).toFixed(1)) : 0);
+      });
+
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Win %',
+            data: winRates,
+            borderColor: '#f0c040',
+            backgroundColor: 'rgba(240,192,64,0.08)',
+            tension: 0.3,
+            fill: true,
+            pointRadius: labels.length > 30 ? 0 : 3,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+            y: { min: 0, max: 100, ticks: { callback: function(v) { return v + '%'; } } }
+          }
+        }
+      });
+    }
+
+    function buildPlacingChart(performance) {
+      var canvas = document.getElementById('chart-placing');
+      if (!performance.length) {
+        canvas.style.display = 'none';
+        document.getElementById('nd-placing').style.display = 'flex';
+        return;
+      }
+
+      var labels = performance.map(function(d) { return d.day; });
+      var data = performance.map(function(d) { return d.avg_placing; });
+
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Avg Placing',
+            data: data,
+            borderColor: '#7ecbff',
+            backgroundColor: 'rgba(126,203,255,0.08)',
+            tension: 0.3,
+            fill: true,
+            pointRadius: labels.length > 30 ? 0 : 3,
+            pointHoverRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+            y: {
+              reverse: true,
+              ticks: { stepSize: 1 },
+              title: { display: true, text: '1 = winner', color: '#888', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    function buildErrorsChart(errors) {
+      var canvas = document.getElementById('chart-errors');
+      if (!errors.length) {
+        canvas.style.display = 'none';
+        document.getElementById('nd-errors').style.display = 'flex';
+        return;
+      }
+
+      var labels = errors.map(function(d) { return d.day; });
+      var data = errors.map(function(d) { return d.errors; });
+
+      new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Errors',
+            data: data,
+            backgroundColor: 'rgba(224,64,64,0.65)',
+            borderColor: '#e04040',
+            borderWidth: 1,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+    }
+
+    function buildStyleChart(trends) {
+      var canvas = document.getElementById('chart-style');
+      if (!trends.length) {
+        canvas.style.display = 'none';
+        document.getElementById('nd-style').style.display = 'flex';
+        return;
+      }
+
+      var labels = trends.map(function(d) { return d.day; });
+
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'VPIP %',
+              data: trends.map(function(d) { return d.vpip; }),
+              borderColor: '#7ec87e',
+              backgroundColor: 'transparent',
+              tension: 0.3,
+              pointRadius: labels.length > 30 ? 0 : 3,
+              pointHoverRadius: 5,
+            },
+            {
+              label: 'PFR %',
+              data: trends.map(function(d) { return d.pfr; }),
+              borderColor: '#f0c040',
+              backgroundColor: 'transparent',
+              tension: 0.3,
+              pointRadius: labels.length > 30 ? 0 : 3,
+              pointHoverRadius: 5,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true,
+              labels: { color: '#ccc', boxWidth: 14, font: { size: 11 } }
+            }
+          },
+          scales: {
+            x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+            y: { min: 0, max: 100, ticks: { callback: function(v) { return v + '%'; } } }
+          }
+        }
+      });
+    }
+
+    var statsUrl = '/api/models/' + MODEL_ID + '/stats' +
+      (LOBBY_ID ? '?lobby_id=' + encodeURIComponent(LOBBY_ID) : '');
+
+    fetch(statsUrl)
+      .then(function(res) {
+        if (res.status === 404) throw new Error('Model not found in leaderboard database.');
+        if (!res.ok) throw new Error('Server returned ' + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        renderSummary(data.summary);
+        var h = data.history || {};
+        renderStyle(h.style || null);
+        buildWinRateChart(h.performance || []);
+        buildPlacingChart(h.performance || []);
+        buildErrorsChart(h.errors || []);
+        buildStyleChart(h.style_trends || []);
+      })
+      .catch(function(err) {
+        document.getElementById('model-title').textContent = 'Model Stats';
+        showError('Failed to load stats: ' + err.message);
+      });
+  </script>
+</body>
+</html>
