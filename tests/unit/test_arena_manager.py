@@ -392,6 +392,58 @@ async def test_reset_after_complete_records_game_results():
 
 
 @pytest.mark.asyncio
+async def test_reset_after_complete_records_historical_model_metrics():
+    from app import sio
+
+    manager = make_arena_manager()
+    with patch("app.arena.arena_manager.GameSession.start_game"):
+        session = manager.get_or_create_session()
+
+    for p in session.players[:-1]:
+        p.is_eliminated = True
+        manager._elimination_order.append(p.player_id)
+
+    player = session.players[0]
+    player.game_api_calls = 5
+    player.game_api_failures = 1
+    player.game_total_latency_ms = 1000
+
+    profiling_service = MagicMock()
+    profiling_service.available = True
+    manager.profiling_service = profiling_service
+    manager.on_viewer_join("sid1")
+
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch.object(
+        manager, "broadcast_state", new_callable=AsyncMock
+    ), patch.object(manager, "start_ai_loop"), patch(
+        "app.arena.arena_manager.GameSession.start_game"
+    ), patch.object(
+        sio, "emit", new_callable=AsyncMock
+    ):
+        await manager._reset_after_complete()
+
+    profiling_service.record_game_end.assert_called_once()
+    player_results = profiling_service.record_game_end.call_args.kwargs["player_results"]
+    first_result = next(r for r in player_results if r["player_id"] == player.player_id)
+    assert first_result["model_id"] == player.model
+    assert first_result["api_calls"] == 5
+    assert first_result["api_failures"] == 1
+    assert first_result["latency_sum_ms"] == 1000
+
+
+def test_create_session_records_lobby_id_for_profiling():
+    manager = make_arena_manager()
+    profiling_service = MagicMock()
+    profiling_service.available = True
+    manager.profiling_service = profiling_service
+
+    with patch("app.arena.arena_manager.GameSession.start_game"):
+        manager.get_or_create_session()
+
+    assert profiling_service.record_game_start.call_args.kwargs["lobby_id"] == "arena"
+
+
+@pytest.mark.asyncio
 async def test_reset_after_complete_skips_recording_when_no_service():
     from app import sio
 

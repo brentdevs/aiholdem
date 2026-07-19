@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ model_id }} | Model Statistics</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      padding: 1.5rem;
+      background: #182719;
+      color: #e8e8e8;
+      font-family: system-ui, sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, select { font: inherit; letter-spacing: 0; }
+
+    .container { width: min(1180px, 100%); margin: 0 auto; }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .title-block { min-width: 0; }
+
+    h1 {
+      overflow-wrap: anywhere;
+      color: #f0c040;
+      font-size: 1.5rem;
+      line-height: 1.25;
+    }
+
+    .model-id {
+      margin-top: 0.25rem;
+      overflow-wrap: anywhere;
+      color: #9da99e;
+      font-size: 0.78rem;
+    }
+
+    .model-id a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 0.18em;
+    }
+
+    .model-id a:hover { color: #f0c040; }
+
+    .back-link {
+      flex: 0 0 auto;
+      padding: 0.42rem 0.75rem;
+      border: 1px solid #d7ad3d;
+      border-radius: 6px;
+      color: #f0c040;
+      text-decoration: none;
+      font-size: 0.85rem;
+    }
+
+    .back-link:hover { background: #f0c040; color: #182719; }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+      padding: 0.8rem 0;
+      border-top: 1px solid #3a563b;
+      border-bottom: 1px solid #3a563b;
+      margin-bottom: 1rem;
+    }
+
+    .control { display: flex; align-items: center; gap: 0.4rem; }
+
+    .control label {
+      color: #b8c1b8;
+      font-size: 0.76rem;
+      font-weight: 650;
+    }
+
+    .control select {
+      min-height: 36px;
+      padding: 0.35rem 1.8rem 0.35rem 0.55rem;
+      border: 1px solid #557257;
+      border-radius: 6px;
+      background: #243825;
+      color: #f2f2f2;
+    }
+
+    .load-status {
+      margin-left: auto;
+      color: #9da99e;
+      font-size: 0.76rem;
+    }
+
+    .error {
+      display: none;
+      margin-bottom: 1rem;
+      padding: 0.65rem 0.8rem;
+      border-left: 3px solid #e06060;
+      background: #3a2424;
+      color: #ffaaaa;
+      font-size: 0.84rem;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .stat-card {
+      min-width: 0;
+      padding: 0.72rem;
+      border: 1px solid #3b563c;
+      border-radius: 6px;
+      background: #233525;
+    }
+
+    .stat-label {
+      color: #aab3aa;
+      font-size: 0.68rem;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      margin-top: 0.18rem;
+      overflow-wrap: anywhere;
+      color: #f0c040;
+      font-size: 1.16rem;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem 1.25rem;
+      margin-bottom: 1.3rem;
+    }
+
+    .chart-panel {
+      min-width: 0;
+      padding: 1rem;
+      border: 1px solid #3b563c;
+      border-radius: 6px;
+      background: #203322;
+    }
+
+    .chart-panel h2, .section-title {
+      margin-bottom: 0.65rem;
+      color: #f0c040;
+      font-size: 0.92rem;
+    }
+
+    .chart-wrap { position: relative; height: 250px; }
+
+    .profile-panel {
+      margin-bottom: 1.25rem;
+      padding: 0.9rem 1rem;
+      border: 1px solid #3b563c;
+      border-radius: 6px;
+      background: #203322;
+    }
+
+    .profile-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .profile-eyebrow {
+      margin-bottom: 0.18rem;
+      color: #aab3aa;
+      font-size: 0.65rem;
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .style-name {
+      color: #79c9f2;
+      font-size: 1.05rem;
+      font-weight: 750;
+    }
+
+    .sample-count {
+      flex: 0 0 auto;
+      color: #9da99e;
+      font-size: 0.76rem;
+    }
+
+    .style-grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
+
+    .style-stat {
+      min-width: 0;
+      padding: 0.15rem 0.65rem;
+      border-left: 1px solid #3b563c;
+    }
+
+    .style-stat:first-child { border-left: 0; padding-left: 0; }
+    .style-stat span { display: block; }
+
+    .style-stat .label {
+      color: #aab3aa;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+    }
+
+    .style-stat .value {
+      margin-top: 0.12rem;
+      color: #e8e8e8;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .detail-band {
+      padding: 1rem 0;
+      border-top: 1px solid #3a563b;
+    }
+
+    .table-scroll { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    th {
+      padding: 0.48rem;
+      border-bottom: 2px solid #3a563b;
+      color: #f0c040;
+      font-size: 0.7rem;
+      text-align: left;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.5rem;
+      border-bottom: 1px solid #2e4530;
+      white-space: nowrap;
+    }
+
+    .num { text-align: right; }
+    .positive { color: #79c980; }
+    .negative { color: #ee7777; }
+    .empty { padding: 1.25rem; color: #9da99e; text-align: center; }
+
+    @media (max-width: 960px) {
+      .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .style-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .style-stat:nth-child(5) { border-left: 0; padding-left: 0; }
+    }
+
+    @media (max-width: 680px) {
+      body { padding: 0.75rem; }
+      .header { flex-direction: column; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-wrap { height: 220px; }
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .style-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .style-stat:nth-child(odd) { border-left: 0; padding-left: 0; }
+      .profile-heading { align-items: flex-start; }
+      .load-status { width: 100%; margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <div class="title-block">
+        <h1 id="model-title">Model Statistics</h1>
+        <div class="model-id">
+          <a id="model-provider-link"
+             href="{{ current_provider_link.url if current_provider_link else '#' }}"
+             target="_blank"
+             rel="noopener noreferrer"
+             {% if not current_provider_link %}hidden{% endif %}>
+            {{ model_id }}
+          </a>
+          <span id="model-id-text" {% if current_provider_link %}hidden{% endif %}>{{ model_id }}</span>
+        </div>
+      </div>
+      <a id="back-link" class="back-link" href="/leaderboard">Leaderboard</a>
+    </header>
+
+    <div class="toolbar">
+      <div class="control">
+        <label for="lobby-filter">Table</label>
+        <select id="lobby-filter">
+          {% for lobby in lobbies %}
+          <option value="{{ lobby.lobby_id }}"
+            {{ "selected" if current_lobby_id == lobby.lobby_id else "" }}>
+            {{ lobby.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="control">
+        <label for="days-filter">Period</label>
+        <select id="days-filter">
+          <option value="7">7 days</option>
+          <option value="30" selected>30 days</option>
+          <option value="90">90 days</option>
+          <option value="365">1 year</option>
+        </select>
+      </div>
+      <span id="load-status" class="load-status">Loading data...</span>
+    </div>
+
+    <div id="error-msg" class="error"></div>
+
+    <section class="summary-grid" aria-label="Model summary">
+      <div class="stat-card"><div class="stat-label">Games</div><div id="games" class="stat-value">--</div></div>
+      <div class="stat-card"><div class="stat-label">Wins</div><div id="wins" class="stat-value">--</div></div>
+      <div class="stat-card"><div class="stat-label">Win rate</div><div id="win-rate" class="stat-value">--</div></div>
+      <div class="stat-card"><div class="stat-label">Avg placement</div><div id="avg-placement" class="stat-value">--</div></div>
+      <div class="stat-card"><div class="stat-label">Avg latency</div><div id="avg-latency" class="stat-value">--</div></div>
+      <div class="stat-card"><div class="stat-label">Failure rate</div><div id="failure-rate" class="stat-value">--</div></div>
+    </section>
+
+    <section class="profile-panel" aria-label="Player profile">
+      <div class="profile-heading">
+        <div>
+          <div class="profile-eyebrow">Player profile</div>
+          <div id="style-name" class="style-name">--</div>
+        </div>
+        <div id="hands-sampled" class="sample-count">-- hands sampled</div>
+      </div>
+      <div class="style-grid">
+        <div class="style-stat"><span class="label">VPIP</span><span id="vpip" class="value">--</span></div>
+        <div class="style-stat"><span class="label">PFR</span><span id="pfr" class="value">--</span></div>
+        <div class="style-stat"><span class="label">3-bet</span><span id="three-bet" class="value">--</span></div>
+        <div class="style-stat"><span class="label">Fold to 3-bet</span><span id="fold-three-bet" class="value">--</span></div>
+        <div class="style-stat"><span class="label">C-bet</span><span id="cbet" class="value">--</span></div>
+        <div class="style-stat"><span class="label">Fold to C-bet</span><span id="fold-cbet" class="value">--</span></div>
+        <div class="style-stat"><span class="label">WTSD</span><span id="wtsd" class="value">--</span></div>
+        <div class="style-stat"><span class="label">Aggression</span><span id="af" class="value">--</span></div>
+      </div>
+    </section>
+
+    <section class="charts-grid" aria-label="Historical charts">
+      <div class="chart-panel">
+        <h2>Daily activity and placement</h2>
+        <div class="chart-wrap"><canvas id="performance-chart"></canvas></div>
+      </div>
+      <div class="chart-panel">
+        <h2>Finish distribution</h2>
+        <div class="chart-wrap"><canvas id="placement-chart"></canvas></div>
+      </div>
+      <div class="chart-panel">
+        <h2>Reliability and latency</h2>
+        <div class="chart-wrap"><canvas id="reliability-chart"></canvas></div>
+      </div>
+      <div class="chart-panel">
+        <h2>Poker style by day</h2>
+        <div class="chart-wrap"><canvas id="style-chart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="detail-band">
+      <h2 class="section-title">Recent games</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Ended</th>
+              <th>Table</th>
+              <th class="num">Finish</th>
+            </tr>
+          </thead>
+          <tbody id="games-body">
+            <tr><td colspan="3" class="empty">Loading games...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    const MODEL_ID = {{ model_id|tojson }};
+    const initialLobbyId = {{ current_lobby_id|tojson }};
+    const activeProviderLinks = {{ active_provider_links|tojson }};
+    const lobbyFilter = document.getElementById('lobby-filter');
+    const daysFilter = document.getElementById('days-filter');
+    const loadStatus = document.getElementById('load-status');
+    const errorMsg = document.getElementById('error-msg');
+    const gamesBody = document.getElementById('games-body');
+    const charts = {};
+
+    const COLORS = {
+      gold: '#f0c040',
+      green: '#79c980',
+      blue: '#79c9f2',
+      red: '#ee7777',
+      violet: '#b995dc',
+      gray: '#9da99e'
+    };
+
+    function currentLobbyId() {
+      return lobbyFilter.value || initialLobbyId;
+    }
+
+    function apiUrl(suffix, params) {
+      const query = new URLSearchParams(params || {});
+      query.set('lobby_id', currentLobbyId());
+      return '/api/models/' + encodeURIComponent(MODEL_ID) + '/' + suffix + '?' + query;
+    }
+
+    function fmt(value, decimals) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return '--';
+      return Number(value).toFixed(decimals);
+    }
+
+    function pct(value) {
+      const formatted = fmt(value, 1);
+      return formatted === '--' ? formatted : formatted + '%';
+    }
+
+    function dateLabel(value) {
+      if (!value) return '';
+      return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function ordinalPlacement(value) {
+      const position = Number(value);
+      const lastTwoDigits = position % 100;
+      if (lastTwoDigits >= 11 && lastTwoDigits <= 13) return position + 'th';
+      const suffixes = { 1: 'st', 2: 'nd', 3: 'rd' };
+      return position + (suffixes[position % 10] || 'th');
+    }
+
+    async function getJson(url) {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('Server returned ' + response.status));
+      return data;
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function chartOptions(extraScales) {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { labels: { color: '#c7cec7', boxWidth: 12 } }
+        },
+        scales: Object.assign({
+          x: {
+            ticks: { color: COLORS.gray, maxRotation: 0 },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: COLORS.gray },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }
+        }, extraScales || {})
+      };
+    }
+
+    function renderChart(name, canvasId, config) {
+      if (charts[name]) charts[name].destroy();
+      charts[name] = new Chart(document.getElementById(canvasId), config);
+    }
+
+    function renderSummary(data) {
+      setText('model-title', data.display_name || MODEL_ID);
+      setText('games', data.games_played ?? '--');
+      setText('wins', data.wins ?? '--');
+      setText('win-rate', pct(data.win_pct));
+      setText('avg-placement', fmt(data.avg_placing, 2));
+      setText('avg-latency', data.avg_latency_ms == null ? '--' : fmt(data.avg_latency_ms, 0) + ' ms');
+      setText('failure-rate', pct(data.failure_rate_pct));
+    }
+
+    function renderHistory(data) {
+      const daily = data.daily || [];
+      const labels = daily.map(function(row) { return dateLabel(row.date); });
+      const performanceOptions = chartOptions({
+        y: {
+          beginAtZero: false,
+          min: 1,
+          reverse: true,
+          position: 'left',
+          ticks: {
+            color: COLORS.gray,
+            precision: 0,
+            callback: function(value) { return 'P' + value; }
+          },
+          title: { display: true, text: 'Average finish', color: COLORS.gray },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        },
+        y1: {
+          beginAtZero: true,
+          position: 'right',
+          ticks: { color: COLORS.gray, precision: 0 },
+          title: { display: true, text: 'Games played', color: COLORS.gray },
+          grid: { drawOnChartArea: false }
+        }
+      });
+      performanceOptions.plugins.tooltip = {
+        callbacks: {
+          label: function(context) {
+            if (context.dataset.yAxisID === 'y') {
+              return ' Average finish: P' + fmt(context.parsed.y, 2);
+            }
+            return ' Games played: ' + context.parsed.y;
+          }
+        }
+      };
+
+      renderChart('performance', 'performance-chart', {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Games played',
+              data: daily.map(function(row) { return row.games; }),
+              borderColor: COLORS.gold,
+              backgroundColor: 'transparent',
+              borderWidth: 2,
+              pointRadius: 2,
+              tension: 0.25,
+              yAxisID: 'y1'
+            },
+            {
+              label: 'Average finish',
+              data: daily.map(function(row) { return row.avg_placement; }),
+              borderColor: COLORS.blue,
+              backgroundColor: COLORS.blue + '22',
+              borderWidth: 2,
+              pointRadius: 2,
+              tension: 0.25,
+              type: 'line',
+              yAxisID: 'y'
+            }
+          ]
+        },
+        options: performanceOptions
+      });
+
+      const placementRows = data.placements || [];
+      renderChart('placement', 'placement-chart', {
+        type: 'bar',
+        data: {
+          labels: placementRows.map(function(row) { return ordinalPlacement(row.position); }),
+          datasets: [
+            {
+              label: 'Games',
+              data: placementRows.map(function(row) { return row.games; }),
+              borderColor: COLORS.green,
+              backgroundColor: COLORS.green + '88',
+            }
+          ]
+        },
+        options: chartOptions({
+          y: {
+            beginAtZero: true,
+            ticks: { color: COLORS.gray, precision: 0 },
+            title: { display: true, text: 'Games played', color: COLORS.gray },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }
+        })
+      });
+
+      renderChart('reliability', 'reliability-chart', {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Failure rate (%)',
+              data: daily.map(function(row) { return row.failure_rate_pct; }),
+              borderColor: COLORS.red,
+              backgroundColor: COLORS.red + '33',
+              tension: 0.25,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Average latency (ms)',
+              data: daily.map(function(row) { return row.avg_latency_ms; }),
+              borderColor: COLORS.blue,
+              backgroundColor: COLORS.blue + '33',
+              tension: 0.25,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: chartOptions({
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              color: COLORS.gray,
+              callback: function(value) { return value + '%'; }
+            },
+            title: { display: true, text: 'Failure rate', color: COLORS.gray }
+          },
+          y1: {
+            beginAtZero: true,
+            position: 'right',
+            ticks: {
+              color: COLORS.gray,
+              callback: function(value) { return value + ' ms'; }
+            },
+            title: { display: true, text: 'Average latency', color: COLORS.gray },
+            grid: { drawOnChartArea: false }
+          }
+        })
+      });
+    }
+
+    function renderStyle(data) {
+      setText('style-name', data.style || 'Not enough data');
+      setText('hands-sampled', (data.hands ?? 0) + ' hands sampled');
+      setText('vpip', pct(data.vpip));
+      setText('pfr', pct(data.pfr));
+      setText('three-bet', pct(data.three_bet));
+      setText('fold-three-bet', pct(data.fold_to_three_bet));
+      setText('cbet', pct(data.cbet));
+      setText('fold-cbet', pct(data.fold_to_cbet));
+      setText('wtsd', pct(data.wtsd));
+      setText('af', fmt(data.af, 2));
+
+      const history = data.history || [];
+      renderChart('style', 'style-chart', {
+        type: 'line',
+        data: {
+          labels: history.map(function(row) { return dateLabel(row.date); }),
+          datasets: [
+            { label: 'VPIP (%)', data: history.map(function(row) { return row.vpip; }), borderColor: COLORS.gold, tension: 0.25 },
+            { label: 'PFR (%)', data: history.map(function(row) { return row.pfr; }), borderColor: COLORS.blue, tension: 0.25 },
+            { label: '3-bet (%)', data: history.map(function(row) { return row.three_bet; }), borderColor: COLORS.violet, tension: 0.25 },
+            { label: 'C-bet (%)', data: history.map(function(row) { return row.cbet; }), borderColor: COLORS.green, tension: 0.25 },
+            { label: 'WTSD (%)', data: history.map(function(row) { return row.wtsd; }), borderColor: COLORS.red, tension: 0.25 }
+          ]
+        },
+        options: chartOptions({
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              color: COLORS.gray,
+              callback: function(value) { return value + '%'; }
+            },
+            title: { display: true, text: 'Percentage', color: COLORS.gray }
+          }
+        })
+      });
+    }
+
+    function appendCell(row, value, className) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      if (className) cell.className = className;
+      row.appendChild(cell);
+      return cell;
+    }
+
+    function renderGames(games) {
+      gamesBody.textContent = '';
+      if (!games.length) {
+        const row = document.createElement('tr');
+        const cell = appendCell(row, 'No completed games in this scope.', 'empty');
+        cell.colSpan = 3;
+        gamesBody.appendChild(row);
+        return;
+      }
+      games.forEach(function(game) {
+        const row = document.createElement('tr');
+        appendCell(row, game.ended_at ? new Date(game.ended_at).toLocaleString() : '--');
+        appendCell(row, game.lobby_id || '--');
+        appendCell(row, game.finish_position ?? '--', 'num');
+        gamesBody.appendChild(row);
+      });
+    }
+
+    function updateNavigation() {
+      const lobbyId = currentLobbyId();
+      const backPath = '/leaderboard/' + encodeURIComponent(lobbyId);
+      document.getElementById('back-link').href = backPath;
+      const providerLink = document.getElementById('model-provider-link');
+      const modelIdText = document.getElementById('model-id-text');
+      const provider = activeProviderLinks[lobbyId];
+      providerLink.hidden = !provider;
+      modelIdText.hidden = Boolean(provider);
+      if (provider) {
+        providerLink.href = provider.url;
+        providerLink.title = 'View ' + MODEL_ID + ' on ' + provider.name;
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.set('lobby_id', lobbyId);
+      window.history.replaceState(null, '', url);
+    }
+
+    async function loadData() {
+      loadStatus.textContent = 'Loading data...';
+      errorMsg.style.display = 'none';
+      updateNavigation();
+      const days = daysFilter.value;
+      const results = await Promise.allSettled([
+        getJson(apiUrl('summary')),
+        getJson(apiUrl('history', { days: days })),
+        getJson(apiUrl('style', { window: 80 })),
+        getJson(apiUrl('games', { limit: 50 }))
+      ]);
+
+      if (results[0].status === 'fulfilled') renderSummary(results[0].value);
+      if (results[1].status === 'fulfilled') renderHistory(results[1].value);
+      if (results[2].status === 'fulfilled') renderStyle(results[2].value);
+      if (results[3].status === 'fulfilled') renderGames(results[3].value);
+
+      const failures = results.filter(function(result) { return result.status === 'rejected'; });
+      if (failures.length) {
+        errorMsg.textContent = failures.map(function(result) { return result.reason.message; }).join(' ');
+        errorMsg.style.display = 'block';
+      }
+      loadStatus.textContent = failures.length ? 'Some data unavailable' : 'Updated ' + new Date().toLocaleTimeString();
+    }
+
+    lobbyFilter.value = initialLobbyId;
+    lobbyFilter.addEventListener('change', loadData);
+    daysFilter.addEventListener('change', loadData);
+    loadData();
+  </script>
+</body>
+</html>
