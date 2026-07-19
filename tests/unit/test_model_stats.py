@@ -5,7 +5,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import app.routes as routes
 from app import create_app
+from app.ai.model_config import LobbyConfig, ModelConfig
+from app.leaderboard.service import LeaderboardQueryError
 from app.profiling.service import ProfilingService, _compute_model_af
 
 
@@ -58,6 +61,38 @@ async def test_model_stats_page_defaults_to_default_lobby(app):
 
 
 @pytest.mark.asyncio
+async def test_model_stats_page_defaults_to_lobby_containing_model(app, monkeypatch):
+    first_lobby = LobbyConfig(
+        lobby_id="first",
+        name="First",
+        description="First lobby",
+        players=[ModelConfig("ollama", "other-model", "Other")],
+    )
+    model_lobby = LobbyConfig(
+        lobby_id="model-table",
+        name="Model Table",
+        description="Target lobby",
+        players=[ModelConfig("openrouter", "provider/target-model", "Target")],
+    )
+    monkeypatch.setattr(routes, "LOBBY_CONFIGS", [first_lobby, model_lobby])
+    monkeypatch.setattr(
+        routes,
+        "get_lobby_summaries",
+        lambda: [
+            {"lobby_id": "first", "name": "First"},
+            {"lobby_id": "model-table", "name": "Model Table"},
+        ],
+    )
+
+    async with app.test_client() as client:
+        response = await client.get("/models/provider/target-model")
+
+    assert response.status_code == 200
+    html = (await response.get_data()).decode()
+    assert 'const initialLobbyId = "model-table"' in html
+
+
+@pytest.mark.asyncio
 async def test_model_stats_page_links_active_model_to_provider(app):
     from app.arena.arena_manager import LOBBY_CONFIGS
 
@@ -104,6 +139,20 @@ async def test_model_summary_passes_lobby_scope(app):
 
 
 @pytest.mark.asyncio
+async def test_model_summary_returns_503_on_database_error(app):
+    service = MagicMock()
+    service.available = True
+    service.get_model_summary.side_effect = LeaderboardQueryError("database offline")
+    app.leaderboard_service = service
+
+    async with app.test_client() as client:
+        response = await client.get("/api/models/google/gemini/summary?lobby_id=arena")
+
+    assert response.status_code == 503
+    assert await response.get_json() == {"error": "Leaderboard unavailable"}
+
+
+@pytest.mark.asyncio
 async def test_model_summary_rejects_all_lobby_scope(app):
     service = MagicMock()
     service.available = True
@@ -139,6 +188,24 @@ async def test_model_history_passes_scope_and_days(app):
 
     assert response.status_code == 200
     service.get_model_history.assert_called_once_with("google/gemini", lobby_id="arena", days=90)
+
+
+@pytest.mark.asyncio
+async def test_model_style_passes_profile_window_and_history_days(app):
+    service = MagicMock()
+    service.available = True
+    service.get_model_style.return_value = {"history": []}
+    app.profiling_service = service
+
+    async with app.test_client() as client:
+        response = await client.get(
+            "/api/models/google/gemini/style?lobby_id=arena&window=120&days=90"
+        )
+
+    assert response.status_code == 200
+    service.get_model_style.assert_called_once_with(
+        "google/gemini", lobby_id="arena", window=120, days=90
+    )
 
 
 @pytest.mark.asyncio
@@ -221,6 +288,54 @@ class _RecordingPool:
 
     def putconn(self, _connection):
         pass
+
+
+def test_init_db_lobby_backfill_is_idempotent():
+    connection = _RecordingConnection()
+    service = ProfilingService(None)
+    service._available = True
+    service._pool = _RecordingPool(connection)
+
+    service.init_db()
+
+    backfill_queries = [
+        query for query, _params in connection.cursor_instance.executions if "UPDATE games" in query
+    ]
+    assert len(backfill_queries) == 1
+    assert "lobby_id IS DISTINCT FROM split_part(game_type, ':', 2)" in backfill_queries[0]
+
+
+def test_model_style_history_uses_days_independently_of_profile_window():
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (80, 40, 25, 10, 50, 55, 45, 12)
+    cursor.description = [
+        ("date",),
+        ("hands",),
+        ("vpip",),
+        ("pfr",),
+        ("three_bet",),
+        ("cbet",),
+        ("wtsd",),
+    ]
+    cursor.fetchall.side_effect = [
+        [],
+        [(datetime(2026, 7, 19, tzinfo=timezone.utc), 12, 40, 25, 10, 55, 12)],
+    ]
+    connection = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+    connection_pool = MagicMock()
+    connection_pool.getconn.return_value = connection
+    service = ProfilingService(None)
+    service._available = True
+    service._pool = connection_pool
+
+    result = service.get_model_style("google/gemini", lobby_id="main-arena", window=80, days=90)
+
+    history_query, history_params = cursor.execute.call_args_list[2].args
+    assert "h.played_at >= NOW() - (%s * INTERVAL '1 day')" in history_query
+    assert "LIMIT %s" not in history_query
+    assert history_params == ["google/gemini", 90, "main-arena"]
+    assert result["history"][0]["hands"] == 12
 
 
 def test_record_game_end_persists_model_metrics():

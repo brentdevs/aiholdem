@@ -722,7 +722,7 @@
       const results = await Promise.allSettled([
         getJson(apiUrl('summary')),
         getJson(apiUrl('history', { days: days })),
-        getJson(apiUrl('style', { window: 80 })),
+        getJson(apiUrl('style', { window: 80, days: days })),
         getJson(apiUrl('games', { limit: 50 }))
       ]);
 

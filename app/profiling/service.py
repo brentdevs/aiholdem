@@ -121,7 +121,8 @@ class ProfilingService:
                         SET lobby_id = split_part(game_type, ':', 2)
                         WHERE game_type LIKE 'arena:%'
                           AND split_part(game_type, ':', 2) != ''
-                          AND lobby_id = 'arena';
+                          AND lobby_id = 'arena'
+                          AND lobby_id IS DISTINCT FROM split_part(game_type, ':', 2);
                     """)
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS hands (
@@ -632,8 +633,14 @@ class ProfilingService:
             logger.warning("Unexpected error querying model history: %s", e)
             return {"daily": [], "placements": []}
 
-    def get_model_style(self, model_id: str, lobby_id: str | None = None, window: int = 80) -> dict:
-        """Return recent aggregate style statistics and daily trends."""
+    def get_model_style(
+        self,
+        model_id: str,
+        lobby_id: str | None = None,
+        window: int = 80,
+        days: int = 30,
+    ) -> dict:
+        """Return a recent aggregate profile and day-scoped style trends."""
         if not self._available:
             return {}
         try:
@@ -702,22 +709,28 @@ class ProfilingService:
 
                     cur.execute(
                         f"""
-                        WITH recent AS ({recent_sql})
                         SELECT
-                            date_trunc('day', played_at) AS date,
+                            date_trunc('day', h.played_at) AS date,
                             COUNT(*) AS hands,
-                            ROUND(AVG(vpip::int) * 100)::int AS vpip,
-                            ROUND(AVG(pfr::int) * 100)::int AS pfr,
-                            ROUND(AVG(three_bet::int)
-                                FILTER (WHERE three_bet IS NOT NULL) * 100)::int AS three_bet,
-                            ROUND(AVG(cbet::int)
-                                FILTER (WHERE cbet IS NOT NULL) * 100)::int AS cbet,
-                            ROUND(AVG(went_to_showdown::int) * 100)::int AS wtsd
-                        FROM recent
+                            ROUND(AVG(hp.vpip::int) * 100)::int AS vpip,
+                            ROUND(AVG(hp.pfr::int) * 100)::int AS pfr,
+                            ROUND(AVG(hp.three_bet::int)
+                                FILTER (WHERE hp.three_bet IS NOT NULL) * 100)::int
+                                AS three_bet,
+                            ROUND(AVG(hp.cbet::int)
+                                FILTER (WHERE hp.cbet IS NOT NULL) * 100)::int AS cbet,
+                            ROUND(AVG(hp.went_to_showdown::int) * 100)::int AS wtsd
+                        FROM hand_players hp
+                        JOIN hands h ON h.hand_id = hp.hand_id
+                        JOIN games g ON g.game_id = h.game_id
+                        JOIN players p ON p.player_id = hp.player_id
+                        WHERE p.model = %s
+                          AND h.played_at >= NOW() - (%s * INTERVAL '1 day')
+                          {game_scope}
                         GROUP BY date
                         ORDER BY date;
                         """,
-                        [model_id, *game_scope_params, window],
+                        [model_id, days, *game_scope_params],
                     )
                     result["history"] = self._rows_as_dicts(cur)
                     return result

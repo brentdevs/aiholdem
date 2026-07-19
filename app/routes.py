@@ -13,6 +13,7 @@ from app.arena.arena_manager import (
     get_arena_manager,
     get_lobby_summaries,
 )
+from app.leaderboard.service import LeaderboardQueryError
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,13 @@ async def _render_lobby(lobby_id: str):
     )
 
 
-def _get_model_lobby_scope() -> str:
-    requested = request.args.get("lobby_id", LOBBY_CONFIGS[0].lobby_id)
+def _get_model_lobby_scope(model_id: str) -> str:
+    requested = request.args.get("lobby_id")
+    if requested is None:
+        for lobby in LOBBY_CONFIGS:
+            if any(player.model_id == model_id for player in lobby.players):
+                return lobby.lobby_id
+        return LOBBY_CONFIGS[0].lobby_id
     if requested == "all":
         raise UnknownLobbyError(requested)
     try:
@@ -165,7 +171,7 @@ async def api_leaderboard():
 @bp.route("/models/<path:model_id>")
 async def model_stats(model_id: str):
     try:
-        current_lobby_id = _get_model_lobby_scope()
+        current_lobby_id = _get_model_lobby_scope(model_id)
     except UnknownLobbyError:
         return Response("Arena lobby not found", status=404)
     active_provider_links = {}
@@ -191,14 +197,17 @@ async def model_stats(model_id: str):
 @bp.route("/api/models/<path:model_id>/summary")
 async def api_model_summary(model_id: str):
     try:
-        lobby_id = _get_model_lobby_scope()
+        lobby_id = _get_model_lobby_scope(model_id)
     except UnknownLobbyError:
         return jsonify({"error": "Arena lobby not found"}), 404
     service = current_app.leaderboard_service
     if not service.available:
         return jsonify({"error": "Leaderboard unavailable"}), 503
-    summary = service.get_model_summary(model_id, lobby_id=lobby_id)
-    if not summary:
+    try:
+        summary = service.get_model_summary(model_id, lobby_id=lobby_id)
+    except LeaderboardQueryError:
+        return jsonify({"error": "Leaderboard unavailable"}), 503
+    if summary is None:
         return jsonify({"error": "No data for model"}), 404
     return jsonify(summary)
 
@@ -206,7 +215,7 @@ async def api_model_summary(model_id: str):
 @bp.route("/api/models/<path:model_id>/history")
 async def api_model_history(model_id: str):
     try:
-        lobby_id = _get_model_lobby_scope()
+        lobby_id = _get_model_lobby_scope(model_id)
     except UnknownLobbyError:
         return jsonify({"error": "Arena lobby not found"}), 404
     try:
@@ -222,23 +231,24 @@ async def api_model_history(model_id: str):
 @bp.route("/api/models/<path:model_id>/style")
 async def api_model_style(model_id: str):
     try:
-        lobby_id = _get_model_lobby_scope()
+        lobby_id = _get_model_lobby_scope(model_id)
     except UnknownLobbyError:
         return jsonify({"error": "Arena lobby not found"}), 404
     try:
         window = _bounded_query_arg("window", 80, 10, 500)
+        days = _bounded_query_arg("days", 30, 1, 365)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     service = current_app.profiling_service
     if not service.available:
         return jsonify({"error": "Profiling unavailable"}), 503
-    return jsonify(service.get_model_style(model_id, lobby_id=lobby_id, window=window))
+    return jsonify(service.get_model_style(model_id, lobby_id=lobby_id, window=window, days=days))
 
 
 @bp.route("/api/models/<path:model_id>/games")
 async def api_model_games(model_id: str):
     try:
-        lobby_id = _get_model_lobby_scope()
+        lobby_id = _get_model_lobby_scope(model_id)
     except UnknownLobbyError:
         return jsonify({"error": "Arena lobby not found"}), 404
     try:

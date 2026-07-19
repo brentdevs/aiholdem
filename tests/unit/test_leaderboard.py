@@ -5,7 +5,10 @@ Requirements: 1.5, 2.3
 
 from unittest.mock import MagicMock
 
-from app.leaderboard.service import LeaderboardService
+import pytest
+from psycopg2 import OperationalError
+
+from app.leaderboard.service import LeaderboardQueryError, LeaderboardService
 
 
 class TestLeaderboardServiceUnavailable:
@@ -23,7 +26,7 @@ class TestLeaderboardServiceUnavailable:
         service.record_game_results([])
         service.sync_retired_status([])
         service.get_leaderboard()
-        service.get_model_summary("any/model")
+        service.get_model_summary("any/model", lobby_id="arena")
 
     def test_get_leaderboard_returns_empty_when_unavailable(self):
         """get_leaderboard() should return [] when service is unavailable."""
@@ -33,7 +36,7 @@ class TestLeaderboardServiceUnavailable:
 
     def test_get_model_summary_returns_empty_when_unavailable(self):
         service = LeaderboardService(None)
-        assert service.get_model_summary("any/model") == {}
+        assert service.get_model_summary("any/model", lobby_id="arena") is None
 
 
 def test_all_tables_keeps_same_model_separate_by_lobby():
@@ -70,3 +73,14 @@ def test_all_tables_keeps_same_model_separate_by_lobby():
     assert [row["model_id"] for row in rows] == ["shared/model", "shared/model"]
     query = cursor.execute.call_args.args[0]
     assert "GROUP BY model_id" not in query
+
+
+def test_model_summary_raises_query_error_when_database_fails():
+    connection_pool = MagicMock()
+    connection_pool.getconn.side_effect = OperationalError("database offline")
+    service = LeaderboardService(None)
+    service._available = True
+    service._pool = connection_pool
+
+    with pytest.raises(LeaderboardQueryError):
+        service.get_model_summary("shared/model", lobby_id="main-arena")

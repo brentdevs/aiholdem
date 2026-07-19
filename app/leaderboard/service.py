@@ -7,6 +7,10 @@ from app.leaderboard.models import GameResult
 logger = logging.getLogger(__name__)
 
 
+class LeaderboardQueryError(RuntimeError):
+    """Raised when leaderboard data cannot be queried."""
+
+
 class LeaderboardService:
     def __init__(self, database_url: str | None) -> None:
         self._available = False
@@ -204,68 +208,43 @@ class LeaderboardService:
             logger.error("Failed to query leaderboard: %s", e)
             return []
 
-    def get_model_summary(self, model_id: str, lobby_id: str | None = None) -> dict:
-        """Return one model's lobby-scoped or all-lobby aggregate totals."""
+    def get_model_summary(self, model_id: str, lobby_id: str) -> dict | None:
+        """Return one model's summary for a concrete lobby."""
         if not self._available:
-            return {}
+            return None
         try:
             conn = self._pool.getconn()
             try:
                 with conn.cursor() as cur:
-                    if lobby_id is None:
-                        cur.execute(
-                            """
-                            SELECT
-                                'all' AS lobby_id,
-                                model_id,
-                                MAX(display_name) AS display_name,
-                                SUM(games_played) AS games_played,
-                                SUM(wins) AS wins,
-                                (SUM(wins) * 100.0)
-                                    / NULLIF(SUM(games_played), 0) AS win_pct,
-                                SUM(placing_sum)::float
-                                    / NULLIF(SUM(games_played), 0) AS avg_placing,
-                                SUM(latency_sum_ms)::float
-                                    / NULLIF(SUM(api_calls), 0) AS avg_latency_ms,
-                                (SUM(api_failures) * 100.0)
-                                    / NULLIF(SUM(api_calls), 0) AS failure_rate_pct,
-                                BOOL_AND(retired) AS retired
-                            FROM leaderboard
-                            WHERE model_id = %s
-                            GROUP BY model_id;
-                            """,
-                            (model_id,),
-                        )
-                    else:
-                        cur.execute(
-                            """
-                            SELECT
-                                lobby_id,
-                                model_id,
-                                display_name,
-                                games_played,
-                                wins,
-                                (wins * 100.0)
-                                    / NULLIF(games_played, 0) AS win_pct,
-                                placing_sum::float
-                                    / NULLIF(games_played, 0) AS avg_placing,
-                                latency_sum_ms::float
-                                    / NULLIF(api_calls, 0) AS avg_latency_ms,
-                                (api_failures * 100.0)
-                                    / NULLIF(api_calls, 0) AS failure_rate_pct,
-                                retired
-                            FROM leaderboard
-                            WHERE model_id = %s AND lobby_id = %s;
-                            """,
-                            (model_id, lobby_id),
-                        )
+                    cur.execute(
+                        """
+                        SELECT
+                            lobby_id,
+                            model_id,
+                            display_name,
+                            games_played,
+                            wins,
+                            (wins * 100.0)
+                                / NULLIF(games_played, 0) AS win_pct,
+                            placing_sum::float
+                                / NULLIF(games_played, 0) AS avg_placing,
+                            latency_sum_ms::float
+                                / NULLIF(api_calls, 0) AS avg_latency_ms,
+                            (api_failures * 100.0)
+                                / NULLIF(api_calls, 0) AS failure_rate_pct,
+                            retired
+                        FROM leaderboard
+                        WHERE model_id = %s AND lobby_id = %s;
+                        """,
+                        (model_id, lobby_id),
+                    )
                     row = cur.fetchone()
                     if row is None:
-                        return {}
+                        return None
                     columns = [desc[0] for desc in cur.description]
                     return dict(zip(columns, row))
             finally:
                 self._pool.putconn(conn)
         except (OperationalError, DatabaseError) as e:
             logger.error("Failed to query model summary: %s", e)
-            return {}
+            raise LeaderboardQueryError("Failed to query model summary") from e
