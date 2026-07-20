@@ -160,6 +160,19 @@
 
     .model-name { font-weight: 600; }
 
+    .model-name a {
+      color: inherit;
+      text-decoration: underline;
+      text-decoration-color: rgba(240, 192, 64, 0.7);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.2em;
+    }
+
+    .model-name a:hover {
+      color: #f0c040;
+      text-decoration-color: #f0c040;
+    }
+
     .num { text-align: right; }
 
     thead th.num { text-align: right; }
@@ -232,6 +245,7 @@
           <tr>
             <th>Rank</th>
             <th>Model</th>
+            <th>Lobby</th>
             <th class="num" data-key="games_played">Games</th>
             <th class="num" data-key="wins">Wins</th>
             <th class="num" data-key="win_pct">Win %</th>
@@ -242,7 +256,7 @@
           </tr>
         </thead>
         <tbody id="leaderboard-body">
-          <tr id="no-data"><td colspan="9">Loading…</td></tr>
+          <tr id="no-data"><td colspan="10">Loading…</td></tr>
         </tbody>
       </table>
       </div>
@@ -257,6 +271,10 @@
     const tableFilter = document.getElementById('table-filter');
     const openTableLink = document.getElementById('open-table-link');
     const initialLobbyId = {{ current_lobby_id|tojson }};
+    const lobbyNames = {};
+    {% for lobby in lobbies %}
+    lobbyNames[{{ lobby.lobby_id|tojson }}] = {{ lobby.name|tojson }};
+    {% endfor %}
     let refreshTimer = null;
     let leaderboardData = [];
     let sortKey = 'win_pct';
@@ -295,7 +313,7 @@
       });
 
       if (!data.length) {
-        tbody.innerHTML = '<tr id="no-data"><td colspan="9">No leaderboard data yet.</td></tr>';
+        tbody.innerHTML = '<tr id="no-data"><td colspan="10">No leaderboard data yet.</td></tr>';
         return;
       }
 
@@ -311,10 +329,15 @@
         var statusBadge = entry.retired
           ? '<span class="badge-retired">Retired</span>'
           : '<span class="badge-active">Active</span>';
+        var lobbyName = lobbyNames[entry.lobby_id] || entry.lobby_id;
 
         tr.innerHTML =
           '<td class="rank-cell">' + (i + 1) + '</td>' +
-          '<td class="model-name">' + escapeHtml(entry.display_name) + '</td>' +
+          '<td class="model-name"><a href="/models/' +
+            encodeURIComponent(entry.model_id) + '?lobby_id=' +
+            encodeURIComponent(entry.lobby_id) + '">' +
+            escapeHtml(entry.display_name) + '</a></td>' +
+          '<td>' + escapeHtml(lobbyName) + '</td>' +
           '<td class="num">' + entry.games_played + '</td>' +
           '<td class="num">' + entry.wins + '</td>' +
           '<td class="num">' + (winPct !== '—' ? winPct + '%' : '—') + '</td>' +

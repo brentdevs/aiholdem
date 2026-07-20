@@ -80,6 +80,19 @@ async def test_leaderboard_unknown_lobby_returns_404(app):
 
 
 @pytest.mark.asyncio
+async def test_leaderboard_renders_model_stats_links(app):
+    async with app.test_client() as client:
+        response = await client.get("/leaderboard/arena")
+
+    assert response.status_code == 200
+    html = (await response.get_data()).decode()
+    assert '\'<td class="model-name"><a href="/models/\'' in html
+    assert "text-decoration: underline" in html
+    assert "<th>Lobby</th>" in html
+    assert "encodeURIComponent(entry.lobby_id)" in html
+
+
+@pytest.mark.asyncio
 async def test_models_route_returns_structured_model_config(app):
     async with app.test_client() as client:
         response = await client.get("/models")

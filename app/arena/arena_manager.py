@@ -379,16 +379,26 @@ class ArenaManager:
                 from app.leaderboard.models import compute_placings
 
                 placings = compute_placings(self._elimination_order)
-                player_results = [
-                    {
+                player_results = []
+                for p in self.session.players:
+                    result = {
                         "player_id": p.player_id,
                         "finish_position": placings.get(p.player_id, len(self.session.players)),
                         "final_stack": p.chips,
                         "buy_in": STARTING_CHIPS,
                         "net_profit": p.chips - STARTING_CHIPS,
                     }
-                    for p in self.session.players
-                ]
+                    if isinstance(p, AIPlayer) and hasattr(p, "model"):
+                        result.update(
+                            {
+                                "model_id": p.model,
+                                "display_name": p.name,
+                                "api_calls": p.game_api_calls,
+                                "api_failures": p.game_api_failures,
+                                "latency_sum_ms": p.game_total_latency_ms,
+                            }
+                        )
+                    player_results.append(result)
                 self.profiling_service.record_game_end(
                     game_id=self.session.profiling_game_id,
                     player_results=player_results,
@@ -471,6 +481,7 @@ class ArenaManager:
                 ]
                 self.profiling_service.record_game_start(
                     game_id=session.profiling_game_id,
+                    lobby_id=self.session_id,
                     game_type=f"arena:{self.session_id}",
                     blind_structure=BLIND_SCHEDULE,
                     num_players=len(session.players),
