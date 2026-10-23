@@ -10,6 +10,7 @@ psycopg2-binary = "==2.9.12"
 quart = "==0.20.0"
 python-socketio = {extras = ["asyncio"], version = "==5.14.0"}
 uvicorn = "==0.34.3"
+pyyaml = "==6.0.3"
 
 [dev-packages]
 pytest = "==9.0.3"

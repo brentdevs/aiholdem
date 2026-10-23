@@ -263,7 +263,7 @@ async def api_model_games(model_id: str):
 
 @bp.route("/models")
 async def get_models():
-    supported_configs = get_supported_model_configs()
+    supported_configs = get_supported_model_configs(LOBBY_CONFIGS)
     supported = [config.as_dict() for config in supported_configs]
     arena_players = [config.as_dict() for config in ARENA_PLAYER_CONFIGS]
     return jsonify(

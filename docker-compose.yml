@@ -5,6 +5,13 @@ services:
       - "5000:5000"
     env_file:
       - .env
+    volumes:
+      - type: bind
+        source: ./arenas.yaml
+        target: /app/arenas.yaml
+        read_only: true
+        bind:
+          create_host_path: false
     restart: unless-stopped
     depends_on:
       postgres:
