@@ -23,7 +23,8 @@ pipenv run pytest             # run all Python tests
 pipenv run pytest tests/unit/ # run unit tests only
 pipenv run pytest tests/property/ # run property tests only
 npx fast-check --test tests/property/test_card_renderer.js
-docker-compose up --build     # run with Docker
+docker compose pull           # fetch the published GHCR image and PostgreSQL
+docker compose up -d          # run with Docker; Compose does not build locally
 ```
 
 The frontend has no build step.
@@ -49,3 +50,64 @@ Pull requests should include a brief description, test commands run, and any rel
 ## Security & Configuration Tips
 
 Keep secrets in `.env`; never commit real API keys. Update `.env.example` with placeholders when adding configuration. Required API keys include `OPENROUTER_API_KEY` for OpenRouter players and `OLLAMA_API_KEY` for Ollama Cloud players.
+
+## Arena Configuration and Model Discovery
+
+### Authoring arena YAML
+
+- The file is **`arenas.yaml`**, not `arena.yaml`. Read the current file and `app/ai/model_config.py` before editing; see README's "Arenas and players" section for deployment and migration details.
+- Edit the YAML, not provider classes or hardcoded model lists, to change seats. Do not replace existing arenas or lineups unless requested.
+- The only root key is `arenas`, a nonempty list. Each arena requires `id`, `name`, `description`, and `players`; each player requires only `backend` and `model`. Unknown fields are rejected.
+- Use unique lowercase, hyphen-separated IDs and preserve existing IDs when renaming or reordering tables: URLs and historical statistics depend on them. The first arena is the default; list order determines display and seat order.
+- Configure **2–9 players** per arena. Backends are case-sensitive: `ollama` or `openrouter`. Reject duplicate `(backend, model)` pairs within a table; the same pair may appear in different arenas.
+- Quote string values that YAML could interpret as numbers, booleans, nulls, or dates. Keep credentials in `.env`, never YAML. Do not add `ARENA_PLAYERS` or `ARENA_LOBBIES`; those formats were removed.
+
+Example shape, not a permanent model registry; discover current IDs before choosing a lineup:
+
+```yaml
+arenas:
+  - id: arena
+    name: "AI Arena"
+    description: "Ollama Cloud matchup"
+    players:
+      - backend: ollama
+        model: "beam"
+      - backend: ollama
+        model: "kimi-k3"
+```
+
+### Discovering provider model IDs
+
+Run these read-only public catalog commands from a shell with `curl` and `jq` (`nix develop` includes both):
+
+```bash
+# Ollama hosted catalog, not the local Ollama server
+curl --fail --silent --show-error https://ollama.com/api/tags | jq -r '.models[].model'
+
+# OpenRouter catalog; use the returned provider/model ID, not the display name
+curl --fail --silent --show-error https://openrouter.ai/api/v1/models | jq -r '.data[].id'
+```
+
+- For `backend: ollama`, this application calls **`https://ollama.com`**, not localhost. `ollama list` shows the local server's catalog and is not authoritative for hosted availability.
+- Use the exact hosted identifier returned by Ollama; do not automatically append `:cloud` or substitute a CLI alias. OpenRouter IDs retain their provider prefix and any returned suffix.
+- Browse [Ollama Cloud models](https://ollama.com/search?c=cloud) or [OpenRouter models](https://openrouter.ai/models) to inspect candidates. Authoritative API guidance: [Ollama Cloud](https://docs.ollama.com/cloud) and [OpenRouter model listing](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+- Select text/chat-capable models. A catalog entry does not prove account access, remaining quota, or correct poker/JSON responses. If discovery fails, report availability as unverified rather than inventing a model ID.
+- Catalog listing does not need an inference request. Do not start paid model turns merely to enumerate models, and never print API keys or full credential-bearing environments.
+
+### Validating and applying changes
+
+Run the real loader without starting game loops:
+
+```bash
+pipenv run python - <<'PY'
+from app.ai.model_config import load_lobby_configs
+
+for arena in load_lobby_configs():
+    print(arena.lobby_id, [(player.backend, player.model) for player in arena.players])
+PY
+```
+
+- To validate a different file, set `ARENA_CONFIG_FILE` to its nonblank path. Leave it unset for the project's default file; relative overrides resolve from the working directory.
+- `pipenv run` loads `.env`. The loader checks model IDs against provider catalogs when the corresponding API keys are available; failed catalog discovery only warns, so distinguish structural validation from verified provider availability.
+- Preserve unrelated config, verify requested seat order, and report exactly what was checked. For loader/schema changes, run `pipenv run pytest tests/unit/test_model_config.py` and the full suite; for lineup-only edits, exercise the loader and, when appropriate, startup without triggering paid turns.
+- Configuration changes require a restart. With Compose, the host YAML must exist before startup; use `docker compose restart web` after edits, including atomic-save replacements. Use `/arena/<id>` for links to a specific table.

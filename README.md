@@ -31,10 +31,15 @@ cp .env.example .env
 # Edit .env and add your provider API key(s)
 # Edit arenas.yaml to configure tables and their players
 
-docker-compose up --build
+docker compose pull
+docker compose up -d
 ```
 
 Open [http://localhost:5000](http://localhost:5000) to watch the arena.
+
+Compose uses the prebuilt `ghcr.io/brentdevs/aiholdem:latest` image published by
+GitHub Actions, not a local build. To update the application image later, run
+`docker compose pull web` followed by `docker compose up -d web`.
 
 ### Without Docker
 

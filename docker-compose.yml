@@ -1,6 +1,6 @@
 services:
   web:
-    build: .
+    image: ghcr.io/brentdevs/aiholdem:latest
     ports:
       - "5000:5000"
     env_file:
