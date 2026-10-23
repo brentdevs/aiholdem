@@ -6,21 +6,16 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+from yaml.constructor import ConstructorError
 
 logger = logging.getLogger(__name__)
 
 OPENROUTER_BACKEND = "openrouter"
 OLLAMA_BACKEND = "ollama"
 SUPPORTED_BACKENDS = (OPENROUTER_BACKEND, OLLAMA_BACKEND)
-DEFAULT_ARENA_PLAYERS = (
-    "ollama:deepseek-v4-pro,"
-    "ollama:kimi-k2.6,"
-    "ollama:glm-5.1,"
-    "ollama:minimax-m2.7,"
-    "ollama:gemma4:31b,"
-    "ollama:nemotron-3-super,"
-    "ollama:mistral-large-3:675b"
-)
 
 
 @dataclass(frozen=True)
@@ -65,13 +60,6 @@ class LobbyConfig:
             "description": self.description,
             "players": [player.as_dict() for player in self.players],
         }
-
-
-def _slugify_lobby_name(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
-    if not slug:
-        raise ValueError("Lobby name must contain at least one letter or number")
-    return slug
 
 
 def _display_name(backend: str, model: str) -> str:
@@ -144,40 +132,83 @@ def _get_available_models() -> dict[str, set[str]]:
     return _available_models_cache
 
 
-def _parse_arena_players(raw_value: str) -> list[tuple[str, str]]:
-    """Parse ARENA_PLAYERS as comma-separated backend:model entries."""
-    entries: list[tuple[str, str]] = []
-    for raw_entry in raw_value.split(","):
-        entry = raw_entry.strip()
-        if not entry:
-            continue
-        if ":" not in entry:
-            raise ValueError(
-                "Invalid ARENA_PLAYERS entry " f"{entry!r}; expected '<backend>:<model>'"
-            )
-        backend, model = entry.split(":", 1)
-        entries.append((backend.strip().lower(), model.strip()))
-    return entries
+class _ArenaLoader(yaml.SafeLoader):
+    """Safe YAML loader that rejects duplicate keys at every mapping level."""
+
+    def construct_mapping(self, node, deep=False):
+        self.flatten_mapping(node)
+        mapping = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            try:
+                duplicate = key in mapping
+            except TypeError as exc:
+                raise ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    "mapping keys must be hashable",
+                    key_node.start_mark,
+                ) from exc
+            if duplicate:
+                raise ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"duplicate mapping key {key!r}",
+                    key_node.start_mark,
+                )
+            mapping[key] = self.construct_object(value_node, deep=deep)
+        return mapping
 
 
-def _validate_arena_entries(entries: list[tuple[str, str]]) -> list[ModelConfig]:
-    if not entries:
-        raise ValueError("ARENA_PLAYERS must include at least one player")
+def _require_mapping(value: object, fields: set[str], context: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"{context}: expected a mapping")
+    for key in value:
+        if key not in fields:
+            raise ValueError(f"{context}: unknown field {key!r}")
+    for field in sorted(fields):
+        if field not in value:
+            raise ValueError(f"{context}.{field}: required field is missing")
+    return value
 
+
+def _require_string(value: object, context: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{context}: expected a nonempty string")
+    return value.strip()
+
+
+def _require_list(value: object, context: str) -> list:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{context}: expected a nonempty list")
+    return value
+
+
+def _load_players(value: object, context: str) -> list[ModelConfig]:
+    players = _require_list(value, context)
     available = _get_available_models()
     seen: set[tuple[str, str]] = set()
     configs: list[ModelConfig] = []
-    for backend, model in entries:
+    for index, player in enumerate(players):
+        player_context = f"{context}[{index}]"
+        entry = _require_mapping(player, {"backend", "model"}, player_context)
+        backend = _require_string(entry["backend"], f"{player_context}.backend")
+        model = _require_string(entry["model"], f"{player_context}.model")
         if backend not in SUPPORTED_BACKENDS:
             valid = ", ".join(SUPPORTED_BACKENDS)
             raise ValueError(
-                f"Unsupported ARENA_PLAYERS backend {backend!r}; valid backends: {valid}"
+                f"{player_context}.backend: unsupported backend {backend!r}; "
+                f"valid backends: {valid}"
             )
+        key = (backend, model)
+        if key in seen:
+            raise ValueError(f"{player_context}: duplicate player {backend}:{model}")
+        seen.add(key)
         backend_models = available.get(backend, set())
         if backend_models and model not in backend_models:
             raise ValueError(
-                f"Model {model!r} not found on {backend!r}. "
-                f"Check the model name is correct and available on the provider."
+                f"{player_context}.model: model {model!r} not found on {backend!r}. "
+                "Check the model name is correct and available on the provider."
             )
         if not backend_models:
             logger.warning(
@@ -185,106 +216,51 @@ def _validate_arena_entries(entries: list[tuple[str, str]]) -> list[ModelConfig]
                 model,
                 backend,
             )
-        key = (backend, model)
-        if key in seen:
-            raise ValueError(f"Duplicate ARENA_PLAYERS entry {backend}:{model}")
-        seen.add(key)
         configs.append(ModelConfig(backend, model, _display_name(backend, model)))
     return configs
 
 
-def load_arena_player_configs(raw_value: str | None = None) -> list[ModelConfig]:
-    """Load and validate the active arena lineup.
+def load_lobby_configs(
+    config_path: str | os.PathLike[str] | None = None,
+) -> list[LobbyConfig]:
+    """Load arena definitions from YAML, preserving arena and player order."""
+    if config_path is None:
+        config_path = os.environ.get("ARENA_CONFIG_FILE")
+        if config_path is None:
+            config_path = Path(__file__).resolve().parents[2] / "arenas.yaml"
+    path = Path(config_path)
+    try:
+        with path.open(encoding="utf-8") as stream:
+            document = yaml.load(stream, Loader=_ArenaLoader)
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"{path}: could not load arena configuration: {exc}") from exc
 
-    Format: "ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash".
-    """
-    if raw_value is None:
-        raw_value = os.environ.get("ARENA_PLAYERS")
-    if not raw_value or not raw_value.strip():
-        if raw_value == "":
-            raise ValueError(
-                "ARENA_PLAYERS environment variable must be set with at least one player "
-                "(format: 'backend:model,backend:model')"
-            )
-        raw_value = DEFAULT_ARENA_PLAYERS
-    entries = _parse_arena_players(raw_value)
-    return _validate_arena_entries(entries)
-
-
-def _parse_lobby_entries(raw_value: str | None = None) -> list[tuple[str, str, str]] | None:
-    if raw_value is None:
-        raw_value = os.environ.get("ARENA_LOBBIES")
-    if raw_value is None:
-        return None
-    if not raw_value.strip():
-        raise ValueError("ARENA_LOBBIES must include at least one lobby")
-
-    entries: list[tuple[str, str, str]] = []
-    for index, raw_lobby in enumerate(raw_value.split(";"), start=1):
-        lobby = raw_lobby.strip()
-        if not lobby:
-            continue
-        parts = [part.strip() for part in lobby.split("|", 2)]
-        if len(parts) != 3:
-            raise ValueError(
-                f"Invalid ARENA_LOBBIES lobby #{index}; expected "
-                "'Name|Description|backend:model,backend:model'"
-            )
-        entries.append((parts[0], parts[1], parts[2]))
-    if not entries:
-        raise ValueError("ARENA_LOBBIES must include at least one lobby")
-    return entries
-
-
-def load_lobby_configs(raw_value: str | None = None) -> list[LobbyConfig]:
-    """Load multi-lobby arena configuration.
-
-    ARENA_LOBBIES format:
-    "Main Arena|Default AI lineup|ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash;
-     Cloud Table|Ollama models|ollama:kimi-k2.6"
-
-    If no lobby config is supplied, this falls back to the legacy ARENA_PLAYERS lineup.
-    """
-    lobby_entries = _parse_lobby_entries(raw_value)
-    if lobby_entries is None:
-        return [
-            LobbyConfig(
-                lobby_id="arena",
-                name="AI Arena",
-                description="The default always-on AI poker table.",
-                players=load_arena_player_configs(),
-            )
-        ]
-
+    context = str(path)
+    root = _require_mapping(document, {"arenas"}, context)
+    arenas = _require_list(root["arenas"], f"{context}: arenas")
     lobbies: list[LobbyConfig] = []
     seen_ids: set[str] = set()
-    for index, (name, description, players_value) in enumerate(lobby_entries, start=1):
-        if not name:
-            raise ValueError(f"Arena lobby #{index} must include a name")
-        if not description:
-            raise ValueError(f"Arena lobby {name!r} must include a description")
-        if not players_value.strip():
-            raise ValueError(f"Arena lobby {name!r} must include a players list")
-
-        lobby_id = _slugify_lobby_name(name)
-        if lobby_id in seen_ids:
-            raise ValueError(f"Duplicate arena lobby name {name!r}")
-        seen_ids.add(lobby_id)
-
-        lobbies.append(
-            LobbyConfig(
-                lobby_id=lobby_id,
-                name=name,
-                description=description,
-                players=load_arena_player_configs(players_value),
+    for index, arena in enumerate(arenas):
+        arena_context = f"{context}: arenas[{index}]"
+        entry = _require_mapping(arena, {"id", "name", "description", "players"}, arena_context)
+        lobby_id = _require_string(entry["id"], f"{arena_context}.id")
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", lobby_id) is None:
+            raise ValueError(
+                f"{arena_context}.id: expected a lowercase URL-safe slug "
+                "(letters, digits, and single separating hyphens)"
             )
-        )
-
+        if lobby_id in seen_ids:
+            raise ValueError(f"{arena_context}.id: duplicate arena ID {lobby_id!r}")
+        seen_ids.add(lobby_id)
+        name = _require_string(entry["name"], f"{arena_context}.name")
+        description = _require_string(entry["description"], f"{arena_context}.description")
+        players = _load_players(entry["players"], f"{arena_context}.players")
+        lobbies.append(LobbyConfig(lobby_id, name, description, players))
     return lobbies
 
 
-def get_supported_model_configs() -> list[ModelConfig]:
-    """Return available models from providers, including arena players."""
+def get_supported_model_configs(lobbies: list[LobbyConfig]) -> list[ModelConfig]:
+    """Return provider models and players from the startup arena configuration."""
     configs: list[ModelConfig] = []
     seen: set[tuple[str, str]] = set()
     available = _get_available_models()
@@ -295,20 +271,10 @@ def get_supported_model_configs() -> list[ModelConfig]:
                 seen.add(key)
                 configs.append(ModelConfig(backend, model, _display_name(backend, model)))
     # Always include current arena players even if provider fetch failed
-    try:
-        for lobby in load_lobby_configs():
-            for config in lobby.players:
-                key = (config.backend, config.model)
-                if key not in seen:
-                    seen.add(key)
-                    configs.append(config)
-    except ValueError:
-        pass
+    for lobby in lobbies:
+        for config in lobby.players:
+            key = (config.backend, config.model)
+            if key not in seen:
+                seen.add(key)
+                configs.append(config)
     return configs
-
-
-def arena_players_env_value(configs: list[ModelConfig] | None = None) -> str:
-    """Serialize arena configs back to ARENA_PLAYERS format."""
-    if configs is None:
-        configs = load_arena_player_configs()
-    return ",".join(f"{config.backend}:{config.model}" for config in configs)

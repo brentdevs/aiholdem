@@ -5,6 +5,8 @@ services:
       - "5000:5000"
     env_file:
       - .env
+    volumes:
+      - ./arenas.yaml:/app/arenas.yaml:ro
     restart: unless-stopped
     depends_on:
       postgres:

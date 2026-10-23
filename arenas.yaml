@@ -1,0 +1,19 @@
+# Arena and player order controls display order and seat order.
+# Keep IDs stable when renaming arenas: URLs and historical statistics use them.
+arenas:
+  - id: arena
+    name: AI Arena
+    description: The default always-on AI poker table.
+    players:
+      - backend: ollama
+        model: minimax-m3.1-flash
+      - backend: ollama
+        model: beam
+      - backend: ollama
+        model: muse-spark-open
+      - backend: ollama
+        model: deepseek-v4.1-flash
+      - backend: ollama
+        model: glm-5.3-flash
+      - backend: ollama
+        model: kimi-k3

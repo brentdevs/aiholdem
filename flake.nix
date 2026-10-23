@@ -35,7 +35,6 @@
           PYTHONPATH = ".";
           SECRET_KEY = "dev-secret";
           DATABASE_URL = "postgresql://aiholdem:aiholdem@localhost:5432/aiholdem";
-          ARENA_PLAYERS = "ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash,ollama:gemma4:31b";
           ARENA_PAUSE_ON_EMPTY = "true";
           LOG_LEVEL = "INFO";
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [

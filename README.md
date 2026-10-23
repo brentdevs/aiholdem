@@ -29,6 +29,7 @@ AI Hold'em is a spectator poker platform. Configured AI players — each backed 
 ```bash
 cp .env.example .env
 # Edit .env and add your provider API key(s)
+# Edit arenas.yaml to configure tables and their players
 
 docker-compose up --build
 ```
@@ -42,6 +43,7 @@ Prerequisites: Python 3.11, Pipenv, PostgreSQL
 ```bash
 cp .env.example .env
 # Edit .env and add your provider API key(s) and DATABASE_URL
+# Edit arenas.yaml to configure tables and their players
 
 pipenv install
 pipenv run python run.py
@@ -49,18 +51,59 @@ pipenv run python run.py
 
 ## Configuration
 
-All configuration is via environment variables. See `.env.example` for the full list.
+Arena definitions live in `arenas.yaml`. Secrets and deployment settings use
+environment variables; see `.env.example`.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENROUTER_API_KEY` | For OpenRouter players | Your OpenRouter API key |
 | `OLLAMA_API_KEY` | For Ollama players | Your Ollama Cloud API key |
-| `SECRET_KEY` | Yes | Flask secret key (change in production) |
+| `SECRET_KEY` | Yes | Application secret key (change in production) |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `ARENA_PAUSE_ON_EMPTY` | No | Pause arena when no viewers connected (default: `true`) |
-| `ARENA_PLAYERS` | No | Comma-separated `backend:model` lineup, for example `ollama:deepseek-v4-pro,openrouter:google/gemini-2.5-flash` |
+| `ARENA_CONFIG_FILE` | No | Alternate arena YAML path; defaults to the project's `arenas.yaml` |
 | `PROFILING_ENABLED` | No | Enable AI player profiling (default: `true`) |
 | `LOG_LEVEL` | No | `DEBUG` / `INFO` / `WARNING` / `ERROR` (default: `INFO`) |
+
+### Arenas and players
+
+Edit `arenas.yaml` to maintain tables and seat lineups:
+
+```yaml
+arenas:
+  - id: arena
+    name: AI Arena
+    description: Mixed-provider matchup
+    players:
+      - backend: ollama
+        model: deepseek-v4-pro
+      - backend: openrouter
+        model: google/gemini-2.5-flash
+```
+
+Add another entry under `arenas` for each table. List order determines arena
+display order and player seat order. Each arena needs a unique lowercase,
+hyphen-separated `id`, a name, a description, and at least one player.
+Supported backends are `ollama` and `openrouter`; model names are provider IDs.
+The same model can play in multiple arenas, but duplicate backend/model pairs
+within one arena are rejected. Keep API keys in `.env`, never in this file.
+
+Keep arena IDs stable when changing display names: URLs and persisted statistics
+are scoped by ID. When migrating existing multi-arena deployments, use each
+arena's previous name-derived slug as its ID. The default table retains `arena`.
+
+This replaces `ARENA_LOBBIES` and `ARENA_PLAYERS`; remove those variables from
+existing deployment environments. There is no environment-string fallback.
+Missing files, malformed YAML, duplicate keys, unknown fields, and invalid
+definitions fail startup rather than silently selecting another lineup.
+
+The file is loaded at startup; restart the application after edits. Docker Compose
+mounts `./arenas.yaml` read-only at `/app/arenas.yaml`, so edits do not require an
+image rebuild. To use another file with Compose, change the bind-mount source;
+if setting `ARENA_CONFIG_FILE`, it must name a path available inside the container.
+Without Docker, relative override paths resolve from the working directory;
+the default file is resolved relative to the project, independent of working directory.
+
 
 ## Running Tests
 
@@ -82,8 +125,9 @@ npx fast-check --test tests/property/test_card_renderer.js
 
 ```
 ├── run.py                  # Entry point
+├── arenas.yaml             # Arena definitions and ordered player lineups
 ├── app/
-│   ├── __init__.py         # Flask app factory, SocketIO init
+│   ├── __init__.py         # Quart app factory, SocketIO init
 │   ├── routes.py           # HTTP routes: arena, leaderboard, FAQ
 │   ├── events.py           # SocketIO event handlers: arena join/disconnect
 │   ├── game/               # Core poker engine
@@ -94,7 +138,7 @@ npx fast-check --test tests/property/test_card_renderer.js
 │   │   ├── evaluator.py    # Hand evaluation and player ranking
 │   │   └── pot_manager.py  # Bet tracking and side pot calculation
 │   ├── ai/
-│   │   ├── model_config.py       # Supported models and arena lineup parsing
+│   │   ├── model_config.py       # Model registry and validated YAML arena loading
 │   │   ├── ollama_player.py      # Ollama Cloud-backed AI player decisions
 │   │   └── openrouter_player.py  # OpenRouter-backed AI player decisions
 │   ├── arena/
