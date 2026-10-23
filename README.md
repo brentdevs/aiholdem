@@ -83,19 +83,38 @@ arenas:
 
 Add another entry under `arenas` for each table. List order determines arena
 display order and player seat order. Each arena needs a unique lowercase,
-hyphen-separated `id`, a name, a description, and at least one player.
+hyphen-separated `id`, a name, a description, and **2 to 9 players**.
 Supported backends are `ollama` and `openrouter`; model names are provider IDs.
 The same model can play in multiple arenas, but duplicate backend/model pairs
 within one arena are rejected. Keep API keys in `.env`, never in this file.
 
+Quote string values that YAML might interpret as numbers, booleans, nulls, or
+dates. For example, use `id: "2024"`, `id: "on"`, or `model: "yes"` rather than
+their unquoted forms. This applies to names and descriptions too.
+YAML anchors and `<<` merges can reuse player mappings; explicit keys override
+inherited keys. Duplicate explicit keys are rejected, including inside merged
+mappings. Extra root-level sections are not allowed.
+
+The first arena is the default table served at `/arena`. Arena cards use
+`/arena/<id>` so IDs such as `arena`, `faq`, `leaderboard`, `models`, or `api`
+still open the correct table, regardless of list order or fixed route names.
+Use these canonical URLs when linking to a specific arena; shortlinks such as
+`/faq` may instead open an existing fixed page.
+
 Keep arena IDs stable when changing display names: URLs and persisted statistics
-are scoped by ID. When migrating existing multi-arena deployments, use each
-arena's previous name-derived slug as its ID. The default table retains `arena`.
+are scoped by ID. For migration:
+
+- If you used `ARENA_LOBBIES`, set **every** ID to its previous name-derived slug,
+  even if there was only one lobby. Lowercase the old name, replace runs outside
+  `a-z` and `0-9` with `-`, then trim leading/trailing `-`. For example,
+  `Main Arena` becomes `main-arena`, not `arena`.
+- If you used only `ARENA_PLAYERS` or the built-in default, use `id: arena`.
 
 This replaces `ARENA_LOBBIES` and `ARENA_PLAYERS`; remove those variables from
 existing deployment environments. There is no environment-string fallback.
 Missing files, malformed YAML, duplicate keys, unknown fields, and invalid
 definitions fail startup rather than silently selecting another lineup.
+Configuration errors identify the source file and, where applicable, the invalid field.
 
 The file is loaded at startup; restart the application after edits. Docker Compose
 mounts `./arenas.yaml` read-only at `/app/arenas.yaml`, so edits do not require an
@@ -103,6 +122,17 @@ image rebuild. To use another file with Compose, change the bind-mount source;
 if setting `ARENA_CONFIG_FILE`, it must name a path available inside the container.
 Without Docker, relative override paths resolve from the working directory;
 the default file is resolved relative to the project, independent of working directory.
+
+### Model catalog API
+
+`GET /models` returns:
+
+- `models`: the deduplicated provider catalog plus players from all configured arenas.
+- `arena_players`: the **first/default arena's** roster, not an all-arena aggregate.
+- `lobbies`: every arena and its own ordered roster in `lobbies[].players`.
+
+Use `lobbies[].players` for multi-arena clients. All arena rosters use the
+startup configuration and change only after an application restart.
 
 
 ## Running Tests

@@ -532,7 +532,7 @@ def get_lobby_summaries() -> list[dict]:
                 "is_live": is_live,
                 "status_label": "Live" if is_live else "Paused",
                 "hand_number": hand_number,
-                "url": f"/{lobby.lobby_id}",
+                "url": f"/arena/{lobby.lobby_id}",
             }
         )
     return summaries

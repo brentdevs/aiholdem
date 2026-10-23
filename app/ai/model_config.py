@@ -135,13 +135,25 @@ def _get_available_models() -> dict[str, set[str]]:
 class _ArenaLoader(yaml.SafeLoader):
     """Safe YAML loader that rejects duplicate keys at every mapping level."""
 
-    def construct_mapping(self, node, deep=False):
-        self.flatten_mapping(node)
-        mapping = {}
-        for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
+    def __init__(self, stream):
+        super().__init__(stream)
+        self._checked_mappings = set()
+
+    def flatten_mapping(self, node):
+        # Anchors may reuse nodes already mutated by an earlier flattening.
+        if node in self._checked_mappings:
+            return super().flatten_mapping(node)
+        # Check only explicit keys before PyYAML expands merges. Its normal
+        # flattening preserves explicit overrides and merge-sequence precedence,
+        # and visits merge-source mappings through this override as well.
+        keys = set()
+        for key_node, _ in node.value:
+            if key_node.tag in {"tag:yaml.org,2002:merge", "tag:yaml.org,2002:value"}:
+                key = key_node.value
+            else:
+                key = self.construct_object(key_node)
             try:
-                duplicate = key in mapping
+                duplicate = key in keys
             except TypeError as exc:
                 raise ConstructorError(
                     "while constructing a mapping",
@@ -156,8 +168,9 @@ class _ArenaLoader(yaml.SafeLoader):
                     f"duplicate mapping key {key!r}",
                     key_node.start_mark,
                 )
-            mapping[key] = self.construct_object(value_node, deep=deep)
-        return mapping
+            keys.add(key)
+        self._checked_mappings.add(node)
+        super().flatten_mapping(node)
 
 
 def _require_mapping(value: object, fields: set[str], context: str) -> dict:
@@ -186,6 +199,8 @@ def _require_list(value: object, context: str) -> list:
 
 def _load_players(value: object, context: str) -> list[ModelConfig]:
     players = _require_list(value, context)
+    if not 2 <= len(players) <= 9:
+        raise ValueError(f"{context}: expected between 2 and 9 players")
     available = _get_available_models()
     seen: set[tuple[str, str]] = set()
     configs: list[ModelConfig] = []
@@ -232,7 +247,7 @@ def load_lobby_configs(
     try:
         with path.open(encoding="utf-8") as stream:
             document = yaml.load(stream, Loader=_ArenaLoader)
-    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeError, yaml.YAMLError, ValueError) as exc:
         raise ValueError(f"{path}: could not load arena configuration: {exc}") from exc
 
     context = str(path)

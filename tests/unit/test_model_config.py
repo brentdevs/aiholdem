@@ -93,7 +93,7 @@ def test_id_is_independent_of_display_name(document, config_file):
 )
 def test_invalid_ids_are_rejected(lobby_id, document, config_file):
     document["arenas"][0]["id"] = lobby_id
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"arenas\[0\]\.id"):
         load_lobby_configs(config_file(document))
 
 
@@ -101,28 +101,28 @@ def test_duplicate_ids_are_rejected(document, config_file):
     duplicate = deepcopy(document["arenas"][0])
     duplicate["name"] = "Different name"
     document["arenas"].append(duplicate)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"arenas\[1\]\.id: duplicate"):
         load_lobby_configs(config_file(document))
 
 
 def test_duplicate_players_are_rejected(document, config_file):
     players = document["arenas"][0]["players"]
     players.append(deepcopy(players[0]))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"players\[2\]: duplicate player"):
         load_lobby_configs(config_file(document))
 
 
 @pytest.mark.parametrize("field", ["id", "name", "description", "players"])
 def test_missing_arena_fields_are_rejected(field, document, config_file):
     del document["arenas"][0][field]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=rf"arenas\[0\]\.{field}: required"):
         load_lobby_configs(config_file(document))
 
 
 @pytest.mark.parametrize("field", ["backend", "model"])
 def test_missing_player_fields_are_rejected(field, document, config_file):
     del document["arenas"][0]["players"][0][field]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=rf"players\[0\]\.{field}: required"):
         load_lobby_configs(config_file(document))
 
 
@@ -132,7 +132,7 @@ def test_string_fields_require_nonempty_strings(field, value, document, config_f
     arena = document["arenas"][0]
     target = arena["players"][0] if field in {"backend", "model"} else arena
     target[field] = value
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=rf"\.{field}: expected a nonempty string"):
         load_lobby_configs(config_file(document))
 
 
@@ -154,16 +154,19 @@ def test_string_fields_require_nonempty_strings(field, value, document, config_f
     ],
 )
 def test_invalid_root_or_arena_collections(invalid, config_file):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"expected a (mapping|nonempty list)|\.arenas: required"):
         load_lobby_configs(config_file(invalid))
 
 
 @pytest.mark.parametrize(
-    "players", [None, [], {}, "ollama:deepseek-v4-pro", 1, [None], [[]], ["ollama:deepseek-v4-pro"]]
+    "players",
+    [None, [], {}, "ollama:deepseek-v4-pro", 1, [None, None], [[], []], ["model", "model"]],
 )
 def test_invalid_player_collections(players, document, config_file):
     document["arenas"][0]["players"] = players
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match=r"\.players(?:\[0\])?: expected a (mapping|nonempty list)"
+    ):
         load_lobby_configs(config_file(document))
 
 
@@ -175,7 +178,7 @@ def test_unknown_fields_are_rejected(level, document, config_file):
         "player": document["arenas"][0]["players"][0],
     }
     targets[level]["typo"] = "unexpected"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"unknown field 'typo'"):
         load_lobby_configs(config_file(document))
 
 
@@ -190,30 +193,29 @@ def test_unknown_fields_are_rejected(level, document, config_file):
 def test_duplicate_mapping_keys_are_rejected_with_location(content, tmp_path):
     path = tmp_path / "duplicates.yaml"
     path.write_text(content, encoding="utf-8")
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError, match="duplicate mapping key") as error:
         load_lobby_configs(path)
     assert str(path) in str(error.value)
-    assert isinstance(error.value.__cause__, yaml.YAMLError)
+    assert isinstance(error.value.__cause__, yaml.constructor.ConstructorError)
     assert error.value.__cause__.problem_mark is not None
 
 
 @pytest.mark.parametrize(
-    "content",
+    ("content", "cause_type", "diagnostic"),
     [
-        "",
-        "  \n# only a comment\n",
-        "null\n",
-        "arenas: [",
-        "!!python/object/apply:builtins.list []",
-        "arenas: []\n---\narenas: []\n",
+        ("", type(None), "expected a mapping"),
+        ("  \n# only a comment\n", type(None), "expected a mapping"),
+        ("null\n", type(None), "expected a mapping"),
+        ("arenas: [", yaml.YAMLError, "could not load"),
     ],
 )
-def test_blank_malformed_and_unsafe_yaml_is_rejected(content, tmp_path):
+def test_blank_and_malformed_yaml_is_rejected(content, cause_type, diagnostic, tmp_path):
     path = tmp_path / "invalid.yaml"
     path.write_text(content, encoding="utf-8")
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError, match=diagnostic) as error:
         load_lobby_configs(path)
     assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, cause_type)
 
 
 def test_missing_file_is_rejected(tmp_path):
@@ -227,7 +229,7 @@ def test_missing_file_is_rejected(tmp_path):
 def test_validation_error_identifies_path_and_field(document, config_file):
     document["arenas"][0]["players"][0]["model"] = None
     path = config_file(document)
-    with pytest.raises(ValueError) as error:
+    with pytest.raises(ValueError, match=r"players\[0\]\.model") as error:
         load_lobby_configs(path)
     assert str(path) in str(error.value)
     assert "arenas[0].players[0].model" in str(error.value)
@@ -236,19 +238,19 @@ def test_validation_error_identifies_path_and_field(document, config_file):
 @pytest.mark.parametrize("backend", ["bad", "OLLAMA"])
 def test_unsupported_backend_is_rejected(backend, document, config_file):
     document["arenas"][0]["players"][0]["backend"] = backend
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"players\[0\]\.backend: unsupported backend"):
         load_lobby_configs(config_file(document))
 
 
 @pytest.mark.parametrize("backend", [OLLAMA_BACKEND, OPENROUTER_BACKEND])
 def test_unavailable_model_is_rejected(backend, document, config_file):
-    document["arenas"][0]["players"] = [{"backend": backend, "model": "not-a-model"}]
-    with pytest.raises(ValueError):
+    document["arenas"][0]["players"][0] = {"backend": backend, "model": "not-a-model"}
+    with pytest.raises(ValueError, match=r"players\[0\]\.model: .*not found"):
         load_lobby_configs(config_file(document))
 
 
 def test_model_allowed_when_provider_unavailable(document, config_file, caplog):
-    document["arenas"][0]["players"] = [{"backend": "ollama", "model": "anything-goes"}]
+    document["arenas"][0]["players"][0] = {"backend": "ollama", "model": "anything-goes"}
     empty = {OPENROUTER_BACKEND: set(), OLLAMA_BACKEND: set()}
     with patch("app.ai.model_config._get_available_models", return_value=empty):
         configs = load_lobby_configs(config_file(document))
@@ -270,19 +272,24 @@ def test_explicit_path_overrides_environment(document, config_file, monkeypatch)
 
 
 def test_default_location_is_independent_of_cwd(document, config_file, tmp_path, monkeypatch):
-    path = config_file(document)
+    config_file(document)
     monkeypatch.setattr(model_config, "__file__", str(tmp_path / "app" / "ai" / "model_config.py"))
     unrelated = tmp_path / "elsewhere"
     unrelated.mkdir()
     monkeypatch.chdir(unrelated)
-    assert path == tmp_path / "arenas.yaml"
     assert load_lobby_configs()[0].lobby_id == "stable-table"
 
 
 def test_supported_models_include_configured_players_without_duplicates(
     document, config_file, monkeypatch
 ):
-    document["arenas"][0]["players"] = [{"backend": "ollama", "model": "anything-goes"}]
+    document["arenas"][0]["players"] = [
+        {"backend": "ollama", "model": "anything-goes"},
+        {"backend": "ollama", "model": "another-model"},
+    ]
+    second = deepcopy(document["arenas"][0])
+    second["id"] = "second-table"
+    document["arenas"].append(second)
     monkeypatch.setenv("ARENA_CONFIG_FILE", str(config_file(document)))
     available = {OPENROUTER_BACKEND: {"openai/gpt-4o-mini"}, OLLAMA_BACKEND: set()}
     with patch("app.ai.model_config._get_available_models", return_value=available):
@@ -290,6 +297,7 @@ def test_supported_models_include_configured_players_without_duplicates(
     assert [(config.backend, config.model) for config in configs] == [
         (OPENROUTER_BACKEND, "openai/gpt-4o-mini"),
         (OLLAMA_BACKEND, "anything-goes"),
+        (OLLAMA_BACKEND, "another-model"),
     ]
 
 
@@ -305,3 +313,175 @@ def test_supported_models_deduplicate_provider_and_arena_models(
     assert set(identities) == {
         (backend, model) for backend, models in mock_available_models.items() for model in models
     }
+
+
+@pytest.mark.parametrize("count", [1, 10])
+def test_player_capacity_rejected_before_provider_checks(count, document, config_file):
+    document["arenas"][0]["players"] = [
+        {"backend": "invalid", "model": f"unknown-{index}"} for index in range(count)
+    ]
+    path = config_file(document)
+    with patch(
+        "app.ai.model_config._get_available_models",
+        side_effect=AssertionError("provider catalog must not be accessed"),
+    ):
+        with pytest.raises(ValueError, match=r"arenas\[0\]\.players: .*2.*9") as error:
+            load_lobby_configs(path)
+    assert str(path) in str(error.value)
+
+
+@pytest.mark.parametrize("count", [2, 9])
+def test_player_capacity_boundaries_are_accepted(count, document, config_file):
+    models = [f"model-{index}" for index in range(count)]
+    document["arenas"][0]["players"] = [{"backend": "ollama", "model": model} for model in models]
+    with patch(
+        "app.ai.model_config._get_available_models",
+        return_value={OLLAMA_BACKEND: set(models)},
+    ):
+        configs = load_lobby_configs(config_file(document))
+    assert [player.model for player in configs[0].players] == models
+
+
+def test_unsafe_yaml_tag_cannot_create_file(tmp_path):
+    sentinel = tmp_path / "unsafe-loader-executed"
+    path = tmp_path / "unsafe.yaml"
+    tag = "tag:yaml.org,2002:python/object/apply:builtins.eval"
+    # An unsafe constructor would invoke a real filesystem side effect.
+    path.write_text(
+        "!!python/object/apply:builtins.eval\n"
+        + yaml.safe_dump([f"__import__('pathlib').Path({str(sentinel)!r}).touch()"]),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError) as error:
+        load_lobby_configs(path)
+    assert not sentinel.exists()
+    assert str(path) in str(error.value)
+    cause = error.value.__cause__
+    assert isinstance(cause, yaml.constructor.ConstructorError)
+    assert tag in cause.problem
+
+
+def test_multiple_valid_yaml_documents_are_rejected(document, tmp_path):
+    second = deepcopy(document)
+    second["arenas"][0]["id"] = "second-table"
+    path = tmp_path / "multiple.yaml"
+    path.write_text(yaml.safe_dump_all([document, second]), encoding="utf-8")
+    with pytest.raises(ValueError) as error:
+        load_lobby_configs(path)
+    assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, yaml.composer.ComposerError)
+
+
+@pytest.mark.parametrize("content", ["!!map scalar\n", "!!map [one, two]\n"])
+def test_malformed_mapping_nodes_preserve_constructor_error(content, tmp_path):
+    path = tmp_path / "malformed-map.yaml"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match="expected a mapping node") as error:
+        load_lobby_configs(path)
+    assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, yaml.constructor.ConstructorError)
+    assert error.value.__cause__.problem_mark is not None
+
+
+def test_invalid_implicit_date_has_path_and_scalar_error(document, tmp_path):
+    path = tmp_path / "invalid-date.yaml"
+    content = yaml.safe_dump(document).replace("name: Main Arena", "name: 2026-02-30")
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError) as error:
+        load_lobby_configs(path)
+    assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, ValueError)
+
+
+@pytest.mark.parametrize(
+    ("merge", "expected_backend", "expected_model"),
+    [
+        ("*defaults", "ollama", "kimi-k2.6"),
+        (
+            "[*defaults, {backend: openrouter, model: google/gemini-2.5-flash}]",
+            "ollama",
+            "kimi-k2.6",
+        ),
+        (
+            "[{backend: openrouter, model: google/gemini-2.5-flash}, *defaults]",
+            "openrouter",
+            "openai/gpt-4o-mini",
+        ),
+    ],
+)
+@pytest.mark.parametrize("override_first", [False, True])
+def test_yaml_merge_overrides_and_sequence_precedence(
+    merge, expected_backend, expected_model, override_first, tmp_path
+):
+    override = f"        model: {expected_model}\n"
+    merge_line = f"        <<: {merge}\n"
+    path = tmp_path / "merged.yaml"
+    path.write_text(
+        "arenas:\n"
+        "  - id: merged\n"
+        "    name: Merged\n"
+        "    description: Standard YAML merges\n"
+        "    players:\n"
+        "      - &defaults\n"
+        "        <<: {backend: ollama, model: kimi-k2.6}\n"
+        "        model: deepseek-v4-pro\n"
+        "      -\n" + (override + merge_line if override_first else merge_line + override),
+        encoding="utf-8",
+    )
+    players = load_lobby_configs(path)[0].players
+    assert [(player.backend, player.model) for player in players] == [
+        ("ollama", "deepseek-v4-pro"),
+        (expected_backend, expected_model),
+    ]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "<<: {arenas: [], arenas: []}\n",
+        "<<: [{arenas: [], arenas: []}, {arenas: []}]\n",
+        "<<: {arenas: []}\n<<: {arenas: []}\n",
+    ],
+)
+def test_explicit_duplicates_in_yaml_merges_are_rejected(content, tmp_path):
+    path = tmp_path / "duplicate-merge.yaml"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match="duplicate mapping key") as error:
+        load_lobby_configs(path)
+    assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, yaml.constructor.ConstructorError)
+    assert error.value.__cause__.problem_mark is not None
+
+
+@pytest.mark.parametrize("key", ["[one, two]", "{one: two}"])
+def test_unhashable_mapping_keys_are_rejected_with_context(key, tmp_path):
+    path = tmp_path / "unhashable.yaml"
+    path.write_text(f"? {key}\n: value\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="hashable") as error:
+        load_lobby_configs(path)
+    assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, yaml.constructor.ConstructorError)
+    assert error.value.__cause__.problem_mark is not None
+
+
+@pytest.mark.parametrize("variable", ["ARENA_PLAYERS", "ARENA_LOBBIES"])
+def test_obsolete_environment_does_not_replace_missing_yaml(variable, monkeypatch, tmp_path):
+    monkeypatch.setenv(variable, "ollama:deepseek-v4-pro,ollama:kimi-k2.6")
+    path = tmp_path / "missing.yaml"
+    monkeypatch.setenv("ARENA_CONFIG_FILE", str(path))
+    with pytest.raises(ValueError) as error:
+        load_lobby_configs()
+    assert str(path) in str(error.value)
+    assert isinstance(error.value.__cause__, FileNotFoundError)
+
+
+def test_yaml_lineup_ignores_obsolete_environment(document, config_file, monkeypatch):
+    monkeypatch.setenv("ARENA_PLAYERS", "ollama:kimi-k2.6,ollama:qwen3.5:cloud")
+    monkeypatch.setenv("ARENA_LOBBIES", "obsolete|Old Table|ollama:kimi-k2.6,ollama:qwen3.5:cloud")
+    monkeypatch.setenv("ARENA_CONFIG_FILE", str(config_file(document)))
+    lobbies = load_lobby_configs()
+    assert [lobby.lobby_id for lobby in lobbies] == ["stable-table"]
+    assert [(player.backend, player.model) for player in lobbies[0].players] == [
+        (OLLAMA_BACKEND, "deepseek-v4-pro"),
+        (OPENROUTER_BACKEND, "google/gemini-2.5-flash"),
+    ]
