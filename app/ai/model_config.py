@@ -243,6 +243,11 @@ def load_lobby_configs(
         config_path = os.environ.get("ARENA_CONFIG_FILE")
         if config_path is None:
             config_path = Path(__file__).resolve().parents[2] / "arenas.yaml"
+    if not os.fspath(config_path).strip():
+        raise ValueError(
+            "Arena configuration path must not be blank; "
+            "unset ARENA_CONFIG_FILE to use arenas.yaml"
+        )
     path = Path(config_path)
     try:
         with path.open(encoding="utf-8") as stream:

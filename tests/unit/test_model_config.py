@@ -265,9 +265,22 @@ def test_env_path_override_is_relative_to_cwd(document, config_file, monkeypatch
     assert load_lobby_configs()[0].lobby_id == "stable-table"
 
 
-def test_explicit_path_overrides_environment(document, config_file, monkeypatch):
+@pytest.mark.parametrize("blank", ["", " ", "\t\n"])
+@pytest.mark.parametrize("source", ["environment", "argument"])
+def test_blank_configuration_paths_are_rejected(blank, source, monkeypatch):
+    if source == "environment":
+        monkeypatch.setenv("ARENA_CONFIG_FILE", blank)
+        args = ()
+    else:
+        args = (blank,)
+    with pytest.raises(ValueError, match="configuration path must not be blank"):
+        load_lobby_configs(*args)
+
+
+@pytest.mark.parametrize("override", ["missing.yaml", ""])
+def test_explicit_path_overrides_environment(override, document, config_file, monkeypatch):
     path = config_file(document)
-    monkeypatch.setenv("ARENA_CONFIG_FILE", str(path.parent / "missing.yaml"))
+    monkeypatch.setenv("ARENA_CONFIG_FILE", override)
     assert load_lobby_configs(str(path))[0].lobby_id == "stable-table"
 
 

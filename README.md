@@ -84,9 +84,13 @@ arenas:
 Add another entry under `arenas` for each table. List order determines arena
 display order and player seat order. Each arena needs a unique lowercase,
 hyphen-separated `id`, a name, a description, and **2 to 9 players**.
-Supported backends are `ollama` and `openrouter`; model names are provider IDs.
+Backend names are case-sensitive: use `ollama` or `openrouter`. Model names are provider IDs.
 The same model can play in multiple arenas, but duplicate backend/model pairs
 within one arena are rejected. Keep API keys in `.env`, never in this file.
+
+When a provider catalog is available, unknown or retired model IDs fail startup.
+If the catalog cannot be fetched (for example, without API credentials), model
+names are accepted with a warning; successful startup does not prove API availability.
 
 Quote string values that YAML might interpret as numbers, booleans, nulls, or
 dates. For example, use `id: "2024"`, `id: "on"`, or `model: "yes"` rather than
@@ -116,12 +120,21 @@ Missing files, malformed YAML, duplicate keys, unknown fields, and invalid
 definitions fail startup rather than silently selecting another lineup.
 Configuration errors identify the source file and, where applicable, the invalid field.
 
-The file is loaded at startup; restart the application after edits. Docker Compose
-mounts `./arenas.yaml` read-only at `/app/arenas.yaml`, so edits do not require an
+The file is loaded at startup; restart the application after edits. With Docker
+Compose, restart the **web container** using `docker compose restart web`, not
+just the application process inside it. This also refreshes a single-file bind
+mount after an editor replaces the host file through an atomic save.
+
+Compose mounts `./arenas.yaml` read-only at `/app/arenas.yaml`; the source file
+must exist on the Docker host before starting the service. A missing source
+fails the mount instead of creating a directory. YAML edits do not require an
 image rebuild. To use another file with Compose, change the bind-mount source;
 if setting `ARENA_CONFIG_FILE`, it must name a path available inside the container.
+
 Without Docker, relative override paths resolve from the working directory;
 the default file is resolved relative to the project, independent of working directory.
+Leave `ARENA_CONFIG_FILE` unset to use the default; empty or whitespace-only
+values are configuration errors, not a request to use the default.
 
 ### Model catalog API
 
@@ -133,7 +146,6 @@ the default file is resolved relative to the project, independent of working dir
 
 Use `lobbies[].players` for multi-arena clients. All arena rosters use the
 startup configuration and change only after an application restart.
-
 
 ## Running Tests
 

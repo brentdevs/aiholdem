@@ -6,7 +6,12 @@ services:
     env_file:
       - .env
     volumes:
-      - ./arenas.yaml:/app/arenas.yaml:ro
+      - type: bind
+        source: ./arenas.yaml
+        target: /app/arenas.yaml
+        read_only: true
+        bind:
+          create_host_path: false
     restart: unless-stopped
     depends_on:
       postgres:
