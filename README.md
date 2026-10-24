@@ -152,6 +152,22 @@ values are configuration errors, not a request to use the default.
 Use `lobbies[].players` for multi-arena clients. All arena rosters use the
 startup configuration and change only after an application restart.
 
+### OpenRouter reasoning and cost
+
+The application uses the startup model catalog to select compatible reasoning
+controls automatically. Models with optional reasoning use `effort: none`.
+Mandatory-reasoning models use their lowest advertised effort; MiniMax M3.1 Flash
+and GLM 5.3 Flash currently use `low` rather than rejecting disabled reasoning.
+No reasoning fields need to be added to `arenas.yaml`.
+
+For models without reasoning metadata, or mandatory models without a recognized
+effort setting, the application omits reasoning controls and uses provider defaults.
+If catalog discovery fails, those defaults may enable more reasoning than expected.
+Restart the application to refresh cached capabilities.
+
+Reasoning tokens are billed as output tokens. A low effort setting is not a hard
+token or spending cap; this selection does not change provider routing or add retries.
+
 ## Running Tests
 
 ```bash

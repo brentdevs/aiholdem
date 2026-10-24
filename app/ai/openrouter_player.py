@@ -10,6 +10,7 @@ import time
 
 from openrouter import OpenRouter
 
+from app.ai.model_config import get_openrouter_reasoning_config
 from app.game.models import Action, ActionType
 from app.game.players import AIPlayer
 
@@ -441,6 +442,7 @@ class OpenRouterPlayer(AIPlayer):
         display_name = name if name is not None else _derive_display_name(model)
         super().__init__(player_id, display_name, chips, provider="openrouter")
         self.model = model
+        self._reasoning_config = get_openrouter_reasoning_config(model)
         self.profiling_service = None
         self.game_api_calls: int = 0
         self.game_api_failures: int = 0
@@ -512,8 +514,9 @@ class OpenRouterPlayer(AIPlayer):
                     send_kwargs: dict = dict(
                         models=[self.model],
                         messages=[{"role": "user", "content": prompt}],
-                        reasoning={"effort": "none"},
                     )
+                    if self._reasoning_config is not None:
+                        send_kwargs["reasoning"] = self._reasoning_config
                     return await client.chat.send_async(**send_kwargs)
 
             response = await asyncio.wait_for(_call_openrouter(), timeout=20)

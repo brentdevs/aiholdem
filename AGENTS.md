@@ -92,6 +92,7 @@ curl --fail --silent --show-error https://openrouter.ai/api/v1/models | jq -r '.
 - Use the exact hosted identifier returned by Ollama; do not automatically append `:cloud` or substitute a CLI alias. OpenRouter IDs retain their provider prefix and any returned suffix.
 - Browse [Ollama Cloud models](https://ollama.com/search?c=cloud) or [OpenRouter models](https://openrouter.ai/models) to inspect candidates. Authoritative API guidance: [Ollama Cloud](https://docs.ollama.com/cloud) and [OpenRouter model listing](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 - Select text/chat-capable models. A catalog entry does not prove account access, remaining quota, or correct poker/JSON responses. If discovery fails, report availability as unverified rather than inventing a model ID.
+- OpenRouter reasoning is selected automatically from raw catalog metadata: optional reasoning is disabled and mandatory reasoning uses the lowest supported effort. Do not add model-name exceptions or unsupported YAML fields. Preserve raw catalog discovery: the pinned SDK drops the catalog's newer reasoning metadata. Missing capabilities leave provider defaults in effect, which may cost more.
 - Catalog listing does not need an inference request. Do not start paid model turns merely to enumerate models, and never print API keys or full credential-bearing environments.
 
 ### Validating and applying changes
