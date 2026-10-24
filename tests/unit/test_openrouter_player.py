@@ -487,3 +487,35 @@ async def test_llm_called_once_per_decide_action():
         await player.decide_action(game_state, valid)
 
     assert mock_client.chat.send_async.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_mandatory_reasoning_model_takes_turn_instead_of_api_error_fallback(monkeypatch):
+    monkeypatch.setattr(
+        "app.ai.model_config._available_models_cache",
+        {"openrouter": {"example/mandatory"}, "ollama": set()},
+    )
+    monkeypatch.setattr(
+        "app.ai.model_config._openrouter_reasoning_cache",
+        {"example/mandatory": {"mandatory": True, "supported_efforts": ["high", "low"]}},
+    )
+    player = _make_player(model="example/mandatory")
+    client = _mock_client('{"action": "call", "amount": null, "reasoning": "Defend the pot."}')
+    response = client.chat.send_async.return_value
+
+    async def mandatory_reasoning_endpoint(**request):
+        settings = request.get("reasoning", {})
+        if settings.get("enabled") is False or settings.get("effort") not in {"low", "high"}:
+            raise ValueError("Reasoning is mandatory for this endpoint and cannot be disabled.")
+        return response
+
+    client.chat.send_async.side_effect = mandatory_reasoning_endpoint
+    with patch("app.ai.openrouter_player.OpenRouter", return_value=client):
+        action, _ = await player.decide_action(
+            _base_game_state(),
+            [Action(type=ActionType.FOLD), Action(type=ActionType.CALL, amount=20)],
+        )
+
+    assert action.type == ActionType.CALL
+    assert action.amount == 20
+    assert player.game_api_failures == 0

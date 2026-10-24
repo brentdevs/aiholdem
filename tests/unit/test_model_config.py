@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from io import BytesIO
 from unittest.mock import patch
+from urllib.error import URLError
 
 import pytest
 import yaml
@@ -498,3 +501,89 @@ def test_yaml_lineup_ignores_obsolete_environment(document, config_file, monkeyp
         (OLLAMA_BACKEND, "deepseek-v4-pro"),
         (OPENROUTER_BACKEND, "google/gemini-2.5-flash"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        (None, None),
+        ({}, None),
+        ({"mandatory": False, "default_enabled": True}, {"effort": "none"}),
+        (
+            {"mandatory": False, "supported_efforts": ["high", "low"]},
+            {"effort": "none"},
+        ),
+        (
+            {"mandatory": True, "supported_efforts": ["max", "high", "low"]},
+            {"effort": "low"},
+        ),
+        (
+            {"mandatory": True, "supported_efforts": ["high", "minimal", "low"]},
+            {"effort": "minimal"},
+        ),
+        (
+            {"mandatory": True, "supported_efforts": ["none", "high"]},
+            {"effort": "high"},
+        ),
+        ({"mandatory": True, "supported_efforts": None}, {"effort": "minimal"}),
+        ({"mandatory": True}, None),
+        ({"mandatory": True, "supported_efforts": []}, None),
+        ({"mandatory": True, "supported_efforts": ["none"]}, None),
+        ({"mandatory": True, "supported_efforts": ["future-effort"]}, None),
+    ],
+)
+def test_reasoning_config_uses_cheapest_compatible_control(metadata, expected, monkeypatch):
+    cache = {} if metadata is None else {"example/model": metadata}
+    monkeypatch.setattr(model_config, "_openrouter_reasoning_cache", cache)
+    assert model_config.get_openrouter_reasoning_config("example/model") == expected
+
+
+def test_raw_openrouter_catalog_retains_reasoning_capabilities(monkeypatch):
+    catalog = {
+        "data": [
+            {
+                "id": "example/mandatory",
+                "reasoning": {"mandatory": True, "supported_efforts": ["high", "low"]},
+            },
+            {"id": "example/optional", "reasoning": {"mandatory": False}},
+            {"id": "example/plain"},
+        ]
+    }
+    monkeypatch.setenv("OPENROUTER_API_KEY", "catalog-test-key")
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(model_config, "_openrouter_reasoning_cache", {})
+    monkeypatch.setattr(
+        model_config,
+        "urlopen",
+        lambda request, timeout: BytesIO(json.dumps(catalog).encode()),
+    )
+
+    available = model_config._fetch_available_models()
+
+    assert available[OPENROUTER_BACKEND] == {
+        "example/mandatory",
+        "example/optional",
+        "example/plain",
+    }
+    assert model_config.get_openrouter_reasoning_config("example/mandatory") == {"effort": "low"}
+    assert model_config.get_openrouter_reasoning_config("example/optional") == {"effort": "none"}
+    assert model_config.get_openrouter_reasoning_config("example/plain") is None
+
+
+def test_catalog_failure_does_not_reuse_stale_reasoning_capabilities(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "catalog-test-key")
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    monkeypatch.setattr(
+        model_config,
+        "_openrouter_reasoning_cache",
+        {"example/model": {"mandatory": False}},
+    )
+
+    def unavailable(request, timeout):
+        raise URLError("catalog unavailable")
+
+    monkeypatch.setattr(model_config, "urlopen", unavailable)
+    available = model_config._fetch_available_models()
+
+    assert available[OPENROUTER_BACKEND] == set()
+    assert model_config.get_openrouter_reasoning_config("example/model") is None

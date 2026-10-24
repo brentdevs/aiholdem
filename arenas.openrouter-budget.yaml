@@ -1,0 +1,35 @@
+# All seven requested models, ordered by an illustrative uncached token cost.
+# Quotes checked 2026-10-23 UTC: 2,000 input + 200 billable output tokens per turn.
+# Uses lowest listed active standard-route prices, excluding flex/batch tiers.
+# This ordering does NOT pin providers, cap spending, or account for extra reasoning.
+# Requires OPENROUTER_API_KEY in .env.
+# Reasoning is selected automatically from the model catalog. GLM and MiniMax
+# use the lowest supported effort (currently low); reasoning tokens are billed.
+# YAML does not override reasoning settings or impose a token/spending cap.
+arenas:
+  - id: arena
+    name: "OpenRouter Budget Arena"
+    description: "Seven OpenRouter models ordered by estimated uncached token cost"
+    players:
+      # OpenInference quote: $0.0052 input / $0.1985 output per million tokens.
+      # Mandatory reasoning; automatic lowest supported effort (currently low).
+      - backend: openrouter
+        model: "z-ai/glm-5.3-flash"
+      # Novita quote: $0.021 input / $0.063 output per million tokens.
+      - backend: openrouter
+        model: "inclusionai/ling-3.0-flash"
+      # Sail Research quote: $0.101 input / $0.15 output per million tokens.
+      - backend: openrouter
+        model: "deepseek/deepseek-v4.1-flash-1017"
+      # Darkbloom quote: $0.10 input / $0.28 output per million tokens.
+      - backend: openrouter
+        model: "xiaomi/mimo-v2.6-flash"
+      # InferenceNet quote: $0.10 input / $0.50 output per million tokens.
+      # Mandatory reasoning; automatic lowest supported effort (currently low).
+      - backend: openrouter
+        model: "minimax/minimax-m3.1-flash"
+      # Alibaba quote: $0.15 input / $0.47 output per million tokens (tied).
+      - backend: openrouter
+        model: "qwen/qwen3.8-flash"
+      - backend: openrouter
+        model: "qwen/qwen3.8-omni-flash"

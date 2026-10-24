@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 import yaml
 from yaml.constructor import ConstructorError
@@ -77,20 +79,25 @@ def _display_name(backend: str, model: str) -> str:
 def _fetch_available_models() -> dict[str, set[str]]:
     """Fetch available models from provider APIs at startup."""
     available: dict[str, set[str]] = {OPENROUTER_BACKEND: set(), OLLAMA_BACKEND: set()}
+    _openrouter_reasoning_cache.clear()
 
     # OpenRouter
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
     if openrouter_key:
         try:
-            from openrouter import OpenRouter
-
-            client = OpenRouter(api_key=openrouter_key)
-            response = client.models.list()
-            models = response.data if hasattr(response, "data") else response
-            for m in models:
-                model_id = m.id if hasattr(m, "id") else m.get("id")
-                if model_id:
-                    available[OPENROUTER_BACKEND].add(model_id)
+            # The pinned SDK drops newer catalog fields such as `reasoning`.
+            # Read the raw catalog so capability selection retains that metadata.
+            request = Request(
+                "https://openrouter.ai/api/v1/models",
+                headers={"Authorization": f"Bearer {openrouter_key}"},
+            )
+            with urlopen(request, timeout=20) as response:
+                models = json.load(response)["data"]
+            for model in models:
+                model_id = model["id"]
+                available[OPENROUTER_BACKEND].add(model_id)
+                if isinstance(model.get("reasoning"), dict):
+                    _openrouter_reasoning_cache[model_id] = model["reasoning"]
             logger.info("Loaded %d OpenRouter models", len(available[OPENROUTER_BACKEND]))
         except Exception as e:
             logger.warning("Failed to fetch OpenRouter models: %s", e)
@@ -123,6 +130,7 @@ def _fetch_available_models() -> dict[str, set[str]]:
 
 # Cache fetched models at module level (populated on first call)
 _available_models_cache: dict[str, set[str]] | None = None
+_openrouter_reasoning_cache: dict[str, dict] = {}
 
 
 def _get_available_models() -> dict[str, set[str]]:
@@ -130,6 +138,25 @@ def _get_available_models() -> dict[str, set[str]]:
     if _available_models_cache is None:
         _available_models_cache = _fetch_available_models()
     return _available_models_cache
+
+
+def get_openrouter_reasoning_config(model_id: str) -> dict[str, str] | None:
+    """Minimize reasoning within the model's advertised capabilities."""
+    _get_available_models()
+    metadata = _openrouter_reasoning_cache.get(model_id)
+    if not metadata:
+        # Unknown/non-reasoning models must not receive unsupported controls.
+        return None
+    if not metadata.get("mandatory"):
+        return {"effort": "none"}
+    if "supported_efforts" not in metadata:
+        return None
+    efforts = metadata["supported_efforts"]
+    for effort in ("minimal", "low", "medium", "high", "xhigh", "max"):
+        if efforts is None or effort in efforts:
+            return {"effort": effort}
+    # Mandatory models without a recognized effort use their provider defaults.
+    return None
 
 
 class _ArenaLoader(yaml.SafeLoader):
